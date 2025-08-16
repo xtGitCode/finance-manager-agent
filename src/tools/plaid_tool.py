@@ -1,5 +1,3 @@
-# src/tools/plaid_tool.py (Simplified)
-
 import os
 import time
 import random
@@ -98,16 +96,21 @@ class PlaidTool:
         except Exception as e:
             print(f"   - ❌ Plaid API Error: {e}"); return []
 
-    def analyze_spending(self, transactions: List[Dict], budget: Dict) -> Dict:
+    def analyze_spending(self, transactions: List[Dict], budget: Dict, baseline_spending: Dict[str, float] = None) -> Dict:
         print(f"\n🔧 ANALYZE_SPENDING DEBUG:")
         print(f"  Input transactions: {len(transactions)}")
         print(f"  Budget categories: {list(budget.keys())}")
+        print(f"  Baseline spending provided: {bool(baseline_spending)}")  # Add this for debugging
+        
+        if baseline_spending is None:
+            baseline_spending = {}
+            print(f"  Warning: No baseline spending provided, using empty baseline")
         
         if not transactions:
             print("  ❌ No transactions to analyze!")
             return {
                 "analysis_type": "spending_analysis",
-                "spending_by_category": {},
+                "spending_by_category": baseline_spending.copy(),  # Return baseline if no new transactions
                 "deviation_detected": False,
                 "deviation_details": {}
             }
@@ -116,7 +119,8 @@ class PlaidTool:
         categorized_count = sum(1 for t in transactions if 'budget_category' in t)
         print(f"  Transactions with budget_category: {categorized_count}/{len(transactions)}")
         
-        spending_by_category = {}
+        # This part calculates spending from NEW transactions only
+        new_spending_by_category = {}
         transaction_debug = []
         
         for txn in transactions:
@@ -130,38 +134,64 @@ class PlaidTool:
                 'description': txn.get('description', '')[:30]
             })
             
-            if amount > 0:
-                spending_by_category[budget_category] = spending_by_category.get(budget_category, 0) + amount
+            # FIXED: Include ALL transactions (positive AND negative) for accurate net spending
+            new_spending_by_category[budget_category] = new_spending_by_category.get(budget_category, 0) + amount
         
-        print(f"  Sample transactions processed:")
-        for debug_info in transaction_debug[:3]:
-            print(f"    {debug_info}")
+        # --- THIS IS THE CRUCIAL NEW LOGIC ---
+        # Now, create the TOTAL spending by combining baseline and new spending
+        total_spending_by_category = baseline_spending.copy()  # Start with the baseline
+        for category, new_spend in new_spending_by_category.items():
+            total_spending_by_category[category] = total_spending_by_category.get(category, 0) + new_spend
+        # --- END OF NEW LOGIC ---
         
-        print(f"  Final spending by category: {spending_by_category}")
-        print(f"  Total spending: RM {sum(spending_by_category.values()):.2f}")
+        print(f"  Sample transactions: {len(transaction_debug)} total")
+        print(f"  New transaction spending: {new_spending_by_category}")
+        print(f"  Baseline spending: {baseline_spending}")
+        print(f"  Final TOTAL spending by category: {total_spending_by_category}")
+        
+        # show negative transactions count only
+        negative_count = len([t for t in transaction_debug if t['amount'] < 0])
+        if negative_count > 0:
+            print(f"  Negative transactions (refunds/credits): {negative_count}")
+        
+        print(f"  Total spending: RM {sum(total_spending_by_category.values()):.2f}")
         
         deviations, total_overage = {}, 0
-        for category, spent in spending_by_category.items():
+        # Use the new total_spending_by_category for deviation check
+        for category, spent in total_spending_by_category.items():
             budgeted = budget.get(category, 0)
             if budgeted > 0 and spent > budgeted:
                 overage = spent - budgeted
                 category_transactions = [t for t in transactions if t.get('budget_category') == category]
                 patterns = self._find_spending_patterns(category_transactions)
                 is_discretionary = self._analyze_discretionary_spending(category, category_transactions)
-                deviations[category] = { "budgeted": budgeted, "spent": spent, "overage": overage, "is_discretionary": is_discretionary, "transaction_details": category_transactions, "patterns": patterns }
+                deviations[category] = { 
+                    "budgeted": budgeted, 
+                    "spent": spent, 
+                    "overage": overage, 
+                    "is_discretionary": is_discretionary, 
+                    "transaction_details": category_transactions, 
+                    "patterns": patterns 
+                }
                 total_overage += overage
         
         # also check for budget categories with no spending
         for budget_category in budget.keys():
-            if budget_category not in spending_by_category:
-                spending_by_category[budget_category] = 0
-                print(f"  Added missing category {budget_category} with 0 spending")
+            if budget_category not in total_spending_by_category:
+                total_spending_by_category[budget_category] = baseline_spending.get(budget_category, 0)
+                print(f"  Added missing category {budget_category} with baseline spending: {baseline_spending.get(budget_category, 0)}")
         
-        print(f"  Final spending by category (with all budget categories): {spending_by_category}")
+        print(f"  Final spending by category (with all budget categories): {total_spending_by_category}")
         print(f"  Deviations found: {list(deviations.keys())}")
         print(f"  Total deviations: {len(deviations)}")
                 
-        return { "analysis_type": "spending_analysis", "spending_by_category": spending_by_category, "deviation_detected": bool(deviations), "deviation_details": deviations }
+        # IMPORTANT: Return the total spending in the result
+        return { 
+            "analysis_type": "spending_analysis", 
+            "spending_by_category": total_spending_by_category,  # This key should now hold the combined spending
+            "deviation_detected": bool(deviations), 
+            "deviation_details": deviations 
+        }
 
     def _find_spending_patterns(self, transactions: List[Dict]) -> Dict:
         patterns = {}

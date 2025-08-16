@@ -15,14 +15,63 @@ class TraceyAgent:
         )
         self.reasoning_history = []
     
+    def _is_analysis_complete(self, state: GraphState) -> bool:
+        """Checks if the agent has completed its SOP."""
+        tools_run = {result.get("tool") for result in state.get("tool_results", [])}
+        deviation_detected = state.get("deviation_detected", False)
+
+        if "analyze_spending" not in tools_run:
+            return False # Not done yet, analysis is mandatory
+
+        if not deviation_detected:
+            return True # If no deviation, we are done after analysis
+        else:
+            # If deviation, we need BOTH optimization and research to be done
+            return "optimize_budget" in tools_run and "research_tips" in tools_run
+    
     def agent_node(self, state: GraphState) -> GraphState:
-        updated_state = state.copy()
         current_step = state.get("current_step", 0)
+        
+        print(f"\n🧠 AGENT DEBUG - agent_node entry:")
+        print(f"  State keys received: {list(state.keys())}")
+        print(f"  spending_analysis in received state: {'spending_analysis' in state}")
+        print(f"  deviation_detected: {state.get('deviation_detected', 'NOT FOUND')}")
+        
+        # Check if analysis is complete according to SOP
+        if self._is_analysis_complete(state):
+            print("🧠 Agent: SOP complete. Generating final response.")
+            # Generate final response and preserve state
+            final_response_updates = self._generate_final_response(state, "Analysis completed successfully")
+            
+            # --- THIS IS THE CRITICAL FIX ---
+            # Preserve ALL critical state while adding the final response
+            final_state = {}
+            
+            # First, preserve ALL existing state
+            for key, value in state.items():
+                final_state[key] = value
+            
+            # Then, update with the final response changes
+            final_state.update(final_response_updates)
+            
+            print(f"\n🧠 AGENT DEBUG - final response exit:")
+            print(f"  Final state keys: {list(final_state.keys())}")
+            print(f"  spending_analysis preserved: {'spending_analysis' in final_state}")
+            
+            return final_state
         
         # safety check to avoid infinity loops, max steps = 10
         if current_step >= 10:
             print("   - Agent: Reached step limit, providing final analysis")
-            return self._generate_final_response(state, "Analysis completed after thorough investigation")
+            final_response_updates = self._generate_final_response(state, "Analysis completed after thorough investigation")
+            
+            # Preserve state and add final response
+            final_state = {}
+            for key, value in state.items():
+                final_state[key] = value
+            final_state.update(final_response_updates)
+            
+            return final_state
         
         # log reasoning step
         reasoning_step = f"Step {current_step + 1}: Analyzing financial state"
@@ -40,57 +89,75 @@ class TraceyAgent:
             # standardize output
             parsed_response = self._parse_agent_decision(response_content)
             
+            # --- THIS IS THE CRITICAL FIX ---
+            # Create final state by preserving ALL existing state and adding updates
+            final_state = {}
+            
+            # First, preserve ALL existing state data
+            for key, value in state.items():
+                final_state[key] = value
+            
+            # Then, add agent's decision updates
             if parsed_response.get("needs_tool"):
                 # agent decided it needs more information
                 tool_call = parsed_response["tool_call"]
-                updated_state["tool_calls"] = [tool_call]
-                updated_state["current_analysis"] = parsed_response.get("reasoning", "Gathering additional data")
+                final_state["tool_calls"] = [tool_call]
+                final_state["current_analysis"] = parsed_response.get("reasoning", "Gathering additional data")
                 print(f"   - Agent Decision: {parsed_response['reasoning']}")
                 print(f"   - Tool Selected: {tool_call['tool']}")
                 
             elif parsed_response.get("ready_for_conclusion"):
                 # agent decided it has enough information to conclude
                 final_response = self._generate_autonomous_conclusion(state, parsed_response)
-                updated_state["final_plan"] = final_response
-                updated_state["budget_status"] = final_response["status"]
+                final_state["final_plan"] = final_response
+                final_state["budget_status"] = final_response["status"]
+                final_state["tool_calls"] = []  # Clear tool calls to signal completion
                 print(f"   - Agent Conclusion: {parsed_response.get('reasoning', 'Analysis complete')}")
             
             else:
                 # fallback
-                return self._generate_final_response(state, "Unable to determine next action")
+                final_response_updates = self._generate_final_response(state, "Unable to determine next action")
+                final_state.update(final_response_updates)
             
-            updated_state["current_step"] = current_step + 1
-            return updated_state
+            final_state["current_step"] = current_step + 1
+            
+            print(f"\n🧠 AGENT DEBUG - agent_node exit:")
+            print(f"  State keys returning: {list(final_state.keys())}")
+            print(f"  spending_analysis in returned state: {'spending_analysis' in final_state}")
+            print(f"  tool_calls: {[call.get('tool', 'unknown') for call in final_state.get('tool_calls', [])]}")
+            
+            # CRITICAL: Explicitly log what we're preserving
+            if 'spending_analysis' in state:
+                print(f"  🔥 PRESERVING spending_analysis: {bool(final_state.get('spending_analysis'))}")
+            if 'budget_optimization' in state:
+                print(f"  🔥 PRESERVING budget_optimization: {bool(final_state.get('budget_optimization'))}")
+            
+            return final_state
             
         except Exception as e:
             print(f"   - Agent Error: {e}")
-            return self._generate_final_response(state, f"Analysis error: {str(e)}")
+            final_response_updates = self._generate_final_response(state, f"Analysis error: {str(e)}")
+            
+            # Preserve state and add error response
+            final_state = {}
+            for key, value in state.items():
+                final_state[key] = value
+            final_state.update(final_response_updates)
+            
+            return final_state
     
     def _build_autonomous_system_prompt(self) -> SystemMessage:
-        prompt = """You are an autonomous Financial Guardian Agent with deep expertise in personal finance analysis, behavioral economics, and data pattern recognition.
+        prompt = """You are Tracey, an expert financial analyst agent. Your goal is to conduct a complete financial analysis for the user based on their new transactions.
 
-MISSION: Independently analyze financial data, recognize spending patterns, and provide intelligent recommendations based on your analysis.
-
-AVAILABLE TOOLS & WHEN TO USE THEM:
-- get_transactions: When you need transaction data to begin analysis
-- categorize_transactions: When transactions lack proper categorization
-- analyze_spending: When you need to compare spending against budget
-- research_tips: When you identify specific financial challenges that need solutions
-- optimize_budget: When spending patterns suggest budget reallocation would help
-
-AUTONOMOUS REASONING PROCESS:
-1. Examine what data is available vs. what you need
-2. Identify patterns, anomalies, or concerns in the financial data
-3. Determine if you have sufficient information to provide valuable insights
-4. Choose tools strategically based on your analysis needs
-5. Synthesize findings into actionable, personalized recommendations
-
-KEY PRINCIPLES:
-- Think like a financial advisor, not a rule-following system
-- Recognize spending patterns organically from the data
-- Adapt your analysis approach based on user context
-- Research topics should emerge from actual observed patterns
-- Provide insights that are specific, actionable, and realistic
+You must follow this Standard Operating Procedure (SOP) with precision:
+1.  **Fetch Data:** Always start by getting the user's transactions using the `get_transactions` tool. Do not proceed without transaction data.
+2.  **Process Data:** Once you have transactions, you MUST categorize them using the `categorize_transactions` tool.
+3.  **Analyze:** After categorizing, you MUST analyze spending against the budget using the `analyze_spending` tool.
+4.  **React to Analysis:** Review the result of `analyze_spending`.
+    *   IF `deviation_detected` is `True`, your next step is to call the `optimize_budget` tool to create a reallocation plan.
+    *   AFTER a successful optimization, you MUST call the `research_tips` tool to find actionable advice for the category that had the highest overage.
+    *   IF `deviation_detected` is `False`, your work is mostly done. You do not need to call `optimize_budget` or `research_tips`.
+5.  **Final Report:** Once you have completed all necessary steps according to this SOP and have no more tools to call, you will generate a final, comprehensive summary for the user.
 
 RESPONSE FORMAT:
 Respond with JSON containing either:
@@ -108,58 +175,58 @@ For tool usage:
 For final analysis:
 {
   "ready_for_conclusion": true,
-  "reasoning": "Why you're ready to conclude",
-  "status": "good" or "alert",
-  "key_insights": ["insight1", "insight2"],
-  "recommendations": ["rec1", "rec2"]
+  "reasoning": "Analysis complete",
+  "status": "alert" if overspending detected, otherwise "good",
+  "key_insights": ["Key findings from analysis"],
+  "recommendations": ["Actionable recommendations"]
 }
 
-Think independently. Analyze patterns. Provide value."""
+Remember: Follow the SOP precisely and use the tools in the correct sequence."""
 
         return SystemMessage(content=prompt)
     
     def _format_analysis_context(self, state: GraphState) -> List[HumanMessage]:
-        # build context for agent
+        # Build MINIMAL context to avoid token limits
         context = {
             "user_profile": state.get("user_context", {}),
             "budget_plan": state.get("budget", {}),
-            "available_data": {
-                "transactions": len(state.get("transactions", [])),
-                "categorized": bool(state.get("transactions") and 
-                                 state["transactions"] and 
-                                 "budget_category" in state["transactions"][0]),
-                "analyzed": state.get("deviation_details") is not None
+            "data_status": {
+                "transactions_count": len(state.get("transactions", [])),
+                "is_categorized": bool(state.get("transactions") and 
+                                     state["transactions"] and 
+                                     "budget_category" in state["transactions"][0]),
+                "is_analyzed": state.get("deviation_details") is not None
             },
-            "tool_results": state.get("tool_results", []),
             "current_step": state.get("current_step", 0)
         }
         
-        # include recent transactions
-        if state.get("transactions"):
-            context["recent_transactions"] = state["transactions"][:10]
-        
-        # analysis results
+        # Only include SUMMARY of analysis results, not full data
         if state.get("deviation_details"):
-            context["spending_analysis"] = state["deviation_details"]
+            context["spending_summary"] = {
+                "deviation_detected": state.get("deviation_detected", False),
+                "categories_with_issues": list(state["deviation_details"].keys()),
+                "total_categories_analyzed": len(state.get("spending_analysis", {}).get("spending_by_category", {}))
+            }
+        
+        # Show recent tool results SUMMARY only
+        if state.get("tool_results"):
+            context["recent_tool"] = {
+                "last_tool": state["tool_results"][-1].get("tool", "unknown"),
+                "results_count": len(state["tool_results"])
+            }
         
         analysis_prompt = f"""
-CURRENT FINANCIAL STATE:
-{json.dumps(context, indent=2)}
+CURRENT STATE:
+{context}
 
-TASK: Analyze this financial data and determine your next action. Look for patterns, identify concerns, and decide whether you need more information or are ready to provide recommendations.
+TASK: Based on this summary, decide your next action for cash flow management.
 
-Consider:
-- What spending patterns do you observe?
-- Are there any financial concerns or opportunities?
-- What would be most helpful for this user?
-- Do you need additional data or analysis tools?
-
-Provide your autonomous decision based on your expert analysis."""
+Remember: Your goal is immediate cash flow rebalancing when overspending occurs.
+"""
 
         return [HumanMessage(content=analysis_prompt)]
     
     def _parse_agent_decision(self, response_content: str) -> Dict[str, Any]:
-        # json extraction and handling
         try:
             json_match = re.search(r'\{.*\}', response_content, re.DOTALL)
             if json_match:
@@ -169,17 +236,28 @@ Provide your autonomous decision based on your expert analysis."""
                 raise ValueError("No JSON found in response")
         except Exception as e:
             print(f"   - Parse Error: {e}")
-            if "need" in response_content.lower() and "tool" in response_content.lower():
+            # Smart fallback based on context instead of defaulting to analyze_spending
+            lower_response = response_content.lower()
+            if "categorize" in lower_response:
                 return {
                     "needs_tool": True,
-                    "reasoning": "Agent indicated tool usage needed",
-                    "tool_call": {"tool": "analyze_spending", "args": {}}
+                    "reasoning": "Need to categorize transactions",
+                    "tool_call": {"tool": "categorize_transactions", "args": {}}
+                }
+            elif "optimize" in lower_response or "budget" in lower_response:
+                return {
+                    "needs_tool": True,
+                    "reasoning": "Need to optimize budget",
+                    "tool_call": {"tool": "optimize_budget", "args": {}}
                 }
             else:
+                # Force conclusion to prevent infinite loops
                 return {
                     "ready_for_conclusion": True,
-                    "reasoning": "Agent ready to conclude",
-                    "status": "good"
+                    "reasoning": "Parse error - concluding analysis",
+                    "status": "good",
+                    "key_insights": [],
+                    "recommendations": []
                 }
     
     def _generate_autonomous_conclusion(self, state: GraphState, parsed_response: Dict) -> Dict[str, Any]:
@@ -218,8 +296,8 @@ Provide your autonomous decision based on your expert analysis."""
             "reasoning_history": self.reasoning_history
         }
     
-    def _generate_final_response(self, state: GraphState, reason: str = "") -> GraphState:
-        updated_state = state.copy()
+    def _generate_final_response(self, state: GraphState, reason: str = "") -> Dict[str, Any]:
+        """Generate final response as a dictionary of changes to merge with state."""
         user_context = state.get("user_context", {})
         user_name = user_context.get("name", "User")
         
@@ -250,7 +328,9 @@ Provide your autonomous decision based on your expert analysis."""
             "reasoning_history": self.reasoning_history
         }
         
-        updated_state["final_plan"] = final_plan
-        updated_state["budget_status"] = status
-        
-        return updated_state
+        # Return only the changes to be merged with the existing state
+        return {
+            "final_plan": final_plan,
+            "budget_status": status,
+            "tool_calls": []  # Clear tool calls to signal completion
+        }

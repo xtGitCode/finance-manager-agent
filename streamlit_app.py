@@ -29,7 +29,7 @@ def main():
 
     with st.sidebar:
         st.markdown("""
-            <style> .sidebar-title { text-align: center; font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-weight: 400; font-size: 28px; margin-bottom: -15px; } </style>
+            <style> .sidebar-title { text-align: center; font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-weight: 500; font-size: 38px; margin-bottom: -15px; } </style>
             <p class="sidebar-title">Tracey</p>
             """, unsafe_allow_html=True)
         st.markdown("---")
@@ -78,8 +78,8 @@ def main():
 
     col1, col2 = st.columns([2, 1])
     with col1:
-        st.header("Financial Analysis Dashboard")
-        if st.button("Analyze My Budget", use_container_width=True):
+        st.header("Dashboard")
+        if st.button("Update Transactions", use_container_width=True):
             txn_config = get_transaction_config('standard')
             run_financial_analysis(user_context, budget, txn_config)
         st.markdown("<hr style='margin-top: 2em; margin-bottom: 1em;'>", unsafe_allow_html=True)
@@ -321,12 +321,9 @@ def display_agent_log():
                 st.balloons()
                 st.success(f"**Step {step}** ({timestamp})\n{description}")
          
-            details = log_entry.get('details', {})
-            if details and st.checkbox(f"Show details for Step {step}", key=f"details_{step}"):
-                with st.expander(f"Step {step} Details"):
-                    st.json(details)
+            # Removed the "Show details for Step N" checkbox section
     else: 
-        st.info("Click 'Analyze My Budget' to see the agent in action.")
+        st.info("Click 'Update Transactions' to see the agent in action.")
 
 def display_analysis_results(result):
     if not result: return
@@ -341,33 +338,33 @@ def display_analysis_results(result):
     else:
         st.success(f"**Budget On Track:** {message}")
     
-    # NEW: Display budget optimization if available
-    display_budget_optimization(result)
+    # Main change: use budget optimization instead of cash flow rebalancing
+    optimization_result = result.get("budget_optimization")
+    if optimization_result and optimization_result.get("optimization_needed"):
+        display_budget_optimization(optimization_result)
     
     display_transaction_summary(result)
-    if result.get("tool_results"): display_key_metrics(result)
+    # Removed display_key_metrics section
     spending_analysis = next((r for r in result.get("tool_results", []) if r.get("analysis_type") == "spending_analysis"), None)
     if spending_analysis: display_spending_charts(spending_analysis, result["budget"])
     recommendations = final_plan.get("recommendations", [])
     if recommendations:
-        st.subheader("AI-Powered Recovery Plan")
+        st.subheader("Recommendations by Tracey")
         for i, rec in enumerate(recommendations, 1):
             if isinstance(rec, dict):
                 with st.expander(f"Recommendation {i}: {rec.get('action', 'View Details')}"):
                     st.write(f"**Description:** {rec.get('description', 'No description')}")
                     if rec.get('source'): st.write(f"**Source:** [View Source]({rec['source']})")
-                    if rec.get('potential_savings'): st.metric("Potential Savings", rec['potential_savings'])
-                    if rec.get('difficulty'): st.write(f"**Difficulty:** {rec['difficulty']}")
 
 def display_transaction_summary(result):
     spending_analysis = next((r for r in result.get("tool_results", []) if r.get("analysis_type") == "spending_analysis"), None)
     all_transactions = result.get("transactions", [])
     if spending_analysis and all_transactions:
         st.subheader("Transaction Summary")
-        total_transactions, total_spent = len(all_transactions), spending_analysis.get("total_spent", 0)
+        total_transactions = len(all_transactions)
         col1, col2 = st.columns(2)
         col1.metric("Transactions Analyzed", f"{total_transactions}")
-        col2.metric("Total Amount Spent", f"RM {total_spent:,.2f}")
+        # Removed Total Amount Spent metric
         st.markdown("---"); st.write("**Spending Breakdown by Category**")
         def map_transaction_to_budget_category(transaction):
             # Use the budget_category field added by categorization tool
@@ -391,31 +388,6 @@ def display_transaction_summary(result):
                 df['Amount'] = df['Amount'].map('RM {:,.2f}'.format)
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
-def display_key_metrics(result):
-    st.subheader("Key Metrics")
-    spending_data = next((r for r in result.get("tool_results", []) if r.get("analysis_type") == "spending_analysis"), None)
-    if spending_data:
-        cols = st.columns(4)
-        
-        # Calculate total spent from spending_by_category
-        total_spent = sum(spending_data.get("spending_by_category", {}).values())
-        cols[0].metric("Total Spent", f"RM {total_spent:,.2f}")
-        
-        # Count categories over budget
-        deviation_details = spending_data.get("deviation_details", {})
-        categories_over_budget = len(deviation_details)
-        cols[1].metric("Categories Over Budget", categories_over_budget)
-        
-        # Calculate total overage
-        total_overage = sum(details.get("overage", 0) for details in deviation_details.values())
-        cols[2].metric("Total Overage", f"RM {total_overage:,.2f}")
-        
-        # Calculate budget usage
-        budget_total = sum(result.get("budget", {}).values())
-        if budget_total > 0:
-            usage = (total_spent / budget_total) * 100
-            cols[3].metric("Budget Usage", f"{usage:.1f}%")
-
 def display_spending_charts(spending_data, budget):
     st.subheader("Spending Analysis")
     categories = list(spending_data["spending_by_category"].keys())
@@ -430,23 +402,17 @@ def display_spending_charts(spending_data, budget):
         fig_pie = px.pie(values=spending, names=categories, title="Spending Distribution", height=400)
         st.plotly_chart(fig_pie, use_container_width=True)
 
-def display_budget_optimization(result):
-    """Display budget optimization recommendations if available."""
-    optimization = result.get("budget_optimization")
-    if not optimization or not optimization.get("optimization_needed"):
-        return
+def display_budget_optimization(optimization):
     
     st.markdown("---")
     st.header("Smart Budget Optimization")
     
     st.info("**Tracey has detected opportunities to optimize your budget allocation for better financial health!**")
     
-    # Display optimization summary
     summary = optimization.get("summary", "")
     if summary:
         st.write(summary)
     
-    # Display recommendations
     recommendations = optimization.get("recommendations", [])
     if recommendations:
         st.subheader("Recommended Budget Adjustments")

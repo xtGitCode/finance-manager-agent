@@ -40,31 +40,32 @@ class BudgetOptimizer:
             }
         }
     
-    def analyze_and_optimize(self, 
-                           current_budget: Dict[str, float], 
-                           baseline_spending: Dict[str, float],
-                           new_transactions: Dict[str, float],
+    def analyze_and_optimize(self,
+                           current_budget: Dict[str, float],
+                           total_spending: Dict[str, float],  # <-- NEW: receive total spending directly
                            transactions: List[Dict]) -> Dict:
-        # calculate current state
-        total_spending = {}
-        budget_status = {}
         
+        print(f"\n🔧 BUDGET_OPTIMIZER DEBUG:")
+        print(f"  Current budget: {current_budget}")
+        print(f"  Total spending received: {total_spending}")
+        print(f"  Transactions count: {len(transactions)}")
+        
+        # SIMPLIFIED: Use the provided total spending directly (no more calculation)
+        budget_status = {}
         for category in current_budget.keys():
-            baseline = baseline_spending.get(category, 0)
-            new_txn = new_transactions.get(category, 0)
-            total_spent = baseline + new_txn if new_txn > 0 else baseline
-            total_spending[category] = total_spent
-            
+            spent_amount = total_spending.get(category, 0)  # <-- USE THE PROVIDED TOTAL
             budget_amount = current_budget[category]
-            overage = total_spent - budget_amount
-            # get status of each category
+            overage = spent_amount - budget_amount
+            
             budget_status[category] = {
                 "budget": budget_amount,
-                "spent": total_spent,
+                "spent": spent_amount,  # <-- USE THE PROVIDED TOTAL
                 "overage": overage,
-                "utilization": (total_spent / budget_amount) * 100 if budget_amount > 0 else 0,
-                "new_transactions": new_txn
+                "utilization": (spent_amount / budget_amount) * 100 if budget_amount > 0 else 0,
+                "new_transactions": 0  # No longer relevant, set to 0
             }
+        
+        print(f"  Budget status calculated: {budget_status}")
         
         # identify reallocation opportunities
         over_budget_categories = []
@@ -76,8 +77,8 @@ class BudgetOptimizer:
             elif status["utilization"] < 60:  # less than 60% utilized
                 under_utilized_categories.append((category, status))
         
-        print(f"DEBUG: Over-budget categories: {[cat[0] for cat in over_budget_categories]}")
-        print(f"DEBUG: Under-utilized categories: {[cat[0] for cat in under_utilized_categories]}")
+        print(f"  Over-budget categories: {[cat[0] for cat in over_budget_categories]}")
+        print(f"  Under-utilized categories: {[cat[0] for cat in under_utilized_categories]}")
         
         # generate optimization recommendations
         if not over_budget_categories:

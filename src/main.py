@@ -87,11 +87,20 @@ class FinancialGuardianSystem:
             print(f"    🔧 Executing: {tool_name}")
             
             try:
-                tool_output = self._execute_tool(tool_name, args, state)
+                # IMPORTANT: Pass the updated_state instead of the original state
+                # This ensures each tool gets the latest state with previous tool results
+                tool_output = self._execute_tool(tool_name, args, updated_state)
+                
+                print(f"    🔧 Tool {tool_name} returned: {list(tool_output.keys()) if tool_output else 'EMPTY'}")
+                
                 updated_state = self._update_state_with_tool_result(
                     updated_state, tool_name, tool_output
                 )
                 updated_state["tool_results"].append(tool_output)
+                
+                print(f"    🔧 State after {tool_name}: {list(updated_state.keys())}")
+                if tool_name == "analyze_spending":
+                    print(f"    🔧 VERIFY: spending_analysis in state: {'spending_analysis' in updated_state}")
                 
             except Exception as e:
                 error_output = {"error": f"Tool {tool_name} failed: {str(e)}"}
@@ -122,7 +131,9 @@ class FinancialGuardianSystem:
         elif tool_name == "analyze_spending":
             analysis = self.plaid_tool.analyze_spending(
                 state['transactions'], 
-                state['budget']
+                state['budget'],
+                # This is the new line that passes the baseline spending data
+                state.get('baseline_spending', {})
             )
             return {
                 "tool": "analyze_spending",
@@ -134,16 +145,43 @@ class FinancialGuardianSystem:
             return self._execute_autonomous_research(args, state)
         
         elif tool_name == "optimize_budget":
+            # --- THIS IS THE FIX ---
+            
+            print(f"\n🔧 MAIN.PY DEBUG - optimize_budget (DETAILED):")
+            print(f"  Full state keys: {list(state.keys())}")
+            print(f"  Deviation detected in state: {state.get('deviation_detected', 'NOT FOUND')}")
+            print(f"  Deviation details in state: {state.get('deviation_details', 'NOT FOUND')}")
+            
+            # Get the complete analysis result FROM THE STATE where it was stored
+            analysis_result = state.get("spending_analysis", {})
+            
+            print(f"  Analysis result found: {bool(analysis_result)}")
+            print(f"  Analysis result keys: {list(analysis_result.keys()) if analysis_result else 'EMPTY'}")
+            
+            # Check that we actually got something, just in case
+            if not analysis_result:
+                print(f"  ERROR: Spending analysis data not found in state.")
+                return {"error": "Spending analysis data not found in state."}
+            
+            # Get the final, correct total spending dictionary from the analysis result
+            total_spending_data = analysis_result.get("spending_by_category", {})
+            
+            print(f"  Total spending data extracted: {total_spending_data}")
+            print(f"  Total spending data empty: {not bool(total_spending_data)}")
+            
+            if not total_spending_data:
+                print(f"  ERROR: No spending_by_category found in analysis result")
+                return {"error": "No spending data found in analysis result"}
+            
+            # --- END OF FIX ---
+            
+            # Call the simplified optimizer tool with the correct data
             optimization = self.budget_optimizer.analyze_and_optimize(
                 current_budget=state['budget'],
-                baseline_spending=args.get("baseline_spending", {}),
-                new_transactions=args.get("new_transactions", {}),
-                transactions=state['transactions']
+                total_spending=total_spending_data,  # <-- PASS THE CORRECT TOTALS
+                transactions=state.get('transactions', [])
             )
-            return {
-                "tool": "optimize_budget",
-                **optimization
-            }
+            return {"tool": "optimize_budget", **optimization}
         
         else:
             return {"error": f"Unknown tool: {tool_name}"}
@@ -187,21 +225,39 @@ class FinancialGuardianSystem:
         )
     
     def _update_state_with_tool_result(self, state: GraphState, tool_name: str, result: Dict) -> GraphState:
+        print(f"\n🔧 UPDATING STATE with {tool_name} result:")
+        print(f"  Result keys: {list(result.keys()) if result else 'EMPTY RESULT'}")
+        print(f"  State keys before update: {list(state.keys())}")
+        
         if tool_name == "get_transactions" and "transactions" in result:
             state["transactions"] = result["transactions"]
+            print(f"  Updated transactions: {len(state['transactions'])} items")
         
         elif tool_name == "categorize_transactions" and "categorized_transactions" in result:
             state["transactions"] = result["categorized_transactions"]
+            print(f"  Updated categorized transactions: {len(state['transactions'])} items")
         
         elif tool_name == "analyze_spending":
+            print(f"  *** CRITICAL STATE UPDATE FOR analyze_spending ***")
+            print(f"  Result deviation_detected: {result.get('deviation_detected', 'NOT FOUND')}")
+            print(f"  Result spending_by_category keys: {list(result.get('spending_by_category', {}).keys())}")
+            
             state["deviation_detected"] = result.get("deviation_detected", False)
             state["deviation_details"] = result.get("deviation_details", {})
             state["spending_analysis"] = result
+            
+            print(f"  State after update - deviation_detected: {state.get('deviation_detected')}")
+            print(f"  State after update - spending_analysis keys: {list(state.get('spending_analysis', {}).keys())}")
+            print(f"  *** END CRITICAL UPDATE ***")
         
-        elif tool_name == "optimize_budget" and result.get("proposed_budget"):
-            state["proposed_budget"] = result["proposed_budget"]
+        elif tool_name == "optimize_budget":
             state["budget_optimization"] = result
+            # if optimization proposes a new budget, store it for the UI
+            if result.get("optimization_needed") and result.get("proposed_budget"):
+                state["rebalanced_budgets"] = result["proposed_budget"]
+            print(f"  Updated budget_optimization: optimization_needed = {result.get('optimization_needed')}")
         
+        print(f"  State keys after update: {list(state.keys())}")
         return state
     
     def _should_continue(self, state: GraphState) -> Literal["tool_node", "__end__"]:
@@ -217,7 +273,7 @@ class FinancialGuardianSystem:
             "messages": [{"role": "user", "content": "Please analyze my financial situation"}],
             "tool_results": [],
             "current_step": 0,
-            "max_steps": 10,  # Allow more exploration
+            "max_steps": 10, 
             "deviation_detected": False,
             "deviation_details": {},
             "research_queries": [],
