@@ -6,7 +6,7 @@ An intelligent financial analysis system that demonstrates advanced agentic AI c
 
 The Financial Guardian is an AI agent named Tracey that acts as your personal financial analyst. Unlike traditional budgeting apps that simply track expenses, Tracey autonomously analyzes your financial behavior, detects spending patterns, and provides intelligent recommendations to optimize your budget allocation.
 
-### Core Components of Agentic AI (Implemented)
+### Core Components using Agentic AI
 
 **1. Autonomous Reasoning Engine**
 - **Implementation**: TraceyAgent with LangGraph state management
@@ -32,36 +32,6 @@ The Financial Guardian is an AI agent named Tracey that acts as your personal fi
 - **Implementation**: Financial optimization through budget reallocation and recommendation generation
 - **Characteristic**: Works toward user objectives while adapting methods based on discovered patterns
 - **Evidence**: Different optimization strategies for different spending patterns (large expenses vs. frequent small purchases)
-
-### Key Characteristics Demonstrated
-
-**Autonomy vs. Automation**
-```python
-# Traditional Automation (Fixed Rules)
-if merchant == "KFC":
-    category = "Food"
-    tip = "reduce fast food spending"
-
-# Agentic AI (Contextual Reasoning)
-"Analyze spending patterns to determine if fast food represents 
-occasional treats or systematic overspending, then provide 
-appropriate recommendations based on user context"
-```
-
-**Emergent Behavior**
-- Agent discovers spending patterns not explicitly programmed
-- Adapts optimization strategies based on discovered user behavior
-- Generates contextual recommendations combining multiple data sources
-
-**Robustness & Adaptability**
-- Handles novel spending scenarios through reasoning
-- Gracefully manages missing or incomplete data
-- Scales approach complexity based on problem difficulty
-
-**Transparency & Interpretability**
-- Real-time visibility into agent reasoning process
-- Clear explanation of why specific tools were selected
-- Detailed justification for optimization recommendations
 
 ### Research-Backed Design Principles
 
