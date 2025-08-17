@@ -112,11 +112,6 @@ class FinancialGuardianSystem:
         
         # clear tool calls for next iteration
         updated_state["tool_calls"] = []
-        
-        print(f"\n🔧 ENHANCED_TOOL_NODE EXIT:")
-        print(f"  Final state keys: {list(updated_state.keys())}")
-        print(f"  baseline_spending in final state: {'baseline_spending' in updated_state}")
-        
         return updated_state
     
     def _execute_tool(self, tool_name: str, args: Dict, state: GraphState) -> Dict[str, Any]:
@@ -137,10 +132,6 @@ class FinancialGuardianSystem:
             }
         
         elif tool_name == "analyze_spending":
-            print(f"\n🔧 ANALYZE_SPENDING ENTRY DEBUG:")
-            print(f"  State contains baseline_spending: {'baseline_spending' in state}")
-            print(f"  baseline_spending value: {state.get('baseline_spending', 'NOT FOUND')}")
-            
             analysis = self.plaid_tool.analyze_spending(
                 state['transactions'], 
                 state['budget'],
@@ -215,11 +206,7 @@ class FinancialGuardianSystem:
             transaction_details=transaction_details
         )
     
-    def _update_state_with_tool_result(self, state: GraphState, tool_name: str, result: Dict) -> GraphState:
-        print(f"\n🔧 UPDATING STATE with {tool_name} result:")
-        print(f"  Result keys: {list(result.keys()) if result else 'EMPTY RESULT'}")
-        print(f"  State keys before update: {list(state.keys())}")
-        
+    def _update_state_with_tool_result(self, state: GraphState, tool_name: str, result: Dict) -> GraphState:        
         baseline_spending = state.get('baseline_spending', {})
         if tool_name == "get_transactions" and "transactions" in result:
             state["transactions"] = result["transactions"]

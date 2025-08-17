@@ -92,7 +92,6 @@ def run_financial_analysis(user_context, budget):
     st.session_state.execution_log, st.session_state.analysis_complete, st.session_state.spending_summary = [], False, None
     progress_bar_placeholder, status_text = st.empty(), st.empty()
     baseline_spending = st.session_state.baseline_spending or {}
-    print(f"🔍 DEBUG: baseline_spending being passed to agent: {baseline_spending}")
     
     initial_state = { 
         "transactions": [], 
@@ -114,11 +113,6 @@ def run_financial_analysis(user_context, budget):
         "current_step": 0, 
         "max_steps": 4 
     }
-    
-    print(f"🔍 INITIAL STATE DEBUG:")
-    print(f"  Keys in initial_state: {list(initial_state.keys())}")
-    print(f"  baseline_spending in initial_state: {'baseline_spending' in initial_state}")
-    print(f"  baseline_spending value: {initial_state.get('baseline_spending', 'NOT FOUND')}")
     
     final_state, step_count, expected_steps = None, 0, 10  
     status_text.info(f"Starting Agent analysis...")

@@ -69,11 +69,6 @@ class TraceyAgent:
     def agent_node(self, state: GraphState) -> GraphState:
         current_step = state.get("current_step", 0)
         
-        print(f"\n🧠 AGENT DEBUG - agent_node entry:")
-        print(f"  State keys received: {list(state.keys())}")
-        print(f"  spending_analysis in received state: {'spending_analysis' in state}")
-        print(f"  deviation_detected: {state.get('deviation_detected', 'NOT FOUND')}")
-        
         # Check if analysis is complete according to SOP
         if self._is_analysis_complete(state):
             print("🧠 Agent: SOP complete. Generating final response.")
@@ -84,9 +79,6 @@ class TraceyAgent:
             final_state = state.copy()  # Start with complete copy
             final_state.update(final_response_updates)  # Add final response
             
-            print(f"\n🧠 AGENT DEBUG - final response exit:")
-            print(f"  Final state keys: {list(final_state.keys())}")
-            print(f"  spending_analysis preserved: {'spending_analysis' in final_state}")
             
             return final_state
         
@@ -138,13 +130,6 @@ class TraceyAgent:
                 final_state.update(final_response_updates)
             
             final_state["current_step"] = current_step + 1
-            
-            print(f"\n🧠 AGENT DEBUG - agent_node exit:")
-            print(f"  State keys returning: {list(final_state.keys())}")
-            print(f"  spending_analysis in returned state: {'spending_analysis' in final_state}")
-            print(f"  tool_calls: {[call.get('tool', 'unknown') for call in final_state.get('tool_calls', [])]}")
-            
-            # CRITICAL: Verify state preservation with emergency recovery
             critical_keys = ['spending_analysis', 'budget_optimization', 'baseline_spending', 'deviation_detected', 'deviation_details']
             for key in critical_keys:
                 if key in state:
