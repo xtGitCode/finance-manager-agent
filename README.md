@@ -89,14 +89,9 @@ For categories with overspending, Tracey conducts targeted research:
 ## Technical Implementation
 
 ### Architecture
-Built using modern AI agent frameworks:
-- **LangGraph**: Stateful agent orchestration with cyclical reasoning
-- **Groq LLM**: Fast, efficient language model for financial analysis
-- **Plaid API**: Secure connection to financial data (sandbox mode)
-- **Tavily Research**: Web search capabilities for cost-saving recommendations
-
-### Safety and Privacy
-- Uses sandbox financial data only (no real banking connections)
-- All analysis happens in real-time without data storage
-- Transparent decision-making process visible to users
+Built using:
+- **LangGraph**
+- **Groq**
+- **Plaid API**
+- **Tavily Research**
 
