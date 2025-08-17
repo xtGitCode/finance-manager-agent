@@ -16,18 +16,43 @@ class TraceyAgent:
         self.reasoning_history = []
     
     def _is_analysis_complete(self, state: GraphState) -> bool:
-        """Checks if the agent has completed its SOP."""
-        tools_run = {result.get("tool") for result in state.get("tool_results", [])}
+        tools_run = {result.get("tool") for result in state.get("tool_results", []) if result.get("tool")}
         deviation_detected = state.get("deviation_detected", False)
+        current_step = state.get("current_step", 0)
+        
+        print(f"  🔍 COMPLETION CHECK - Step {current_step}:")
+        print(f"    Tools run so far: {tools_run}")
+        print(f"    Deviation detected: {deviation_detected}")
 
+        # Always need spending analysis first
         if "analyze_spending" not in tools_run:
-            return False # Not done yet, analysis is mandatory
+            print(f"    ❌ Not complete: analyze_spending not run")
+            return False
 
+        # If no deviation, we're done after analysis
         if not deviation_detected:
-            return True # If no deviation, we are done after analysis
-        else:
-            # If deviation, we need BOTH optimization and research to be done
-            return "optimize_budget" in tools_run and "research_tips" in tools_run
+            print(f"    ✅ Complete: No deviations detected")
+            return True
+        
+        # If deviation detected, we need optimization attempts and research
+        has_optimization = "optimize_budget" in tools_run
+        has_research = "research_tips" in tools_run
+        
+        print(f"    Optimization attempted: {has_optimization}")
+        print(f"    Research completed: {has_research}")
+        
+        # For deviations: we need BOTH optimization attempt AND research
+        if has_optimization and has_research:
+            print(f"    ✅ Complete: Both optimization and research completed")
+            return True
+            
+        # Safety: If we've done too many steps, force completion
+        if current_step >= 8:  # Reduced from 10 to prevent infinite loops
+            print(f"    ⚠️ Complete: Safety limit reached at step {current_step}")
+            return True
+            
+        print(f"    ⏳ Not complete: Need optimization({has_optimization}) and research({has_research})")
+        return False
     
     def agent_node(self, state: GraphState) -> GraphState:
         current_step = state.get("current_step", 0)
@@ -43,16 +68,9 @@ class TraceyAgent:
             # Generate final response and preserve state
             final_response_updates = self._generate_final_response(state, "Analysis completed successfully")
             
-            # --- THIS IS THE CRITICAL FIX ---
-            # Preserve ALL critical state while adding the final response
-            final_state = {}
-            
-            # First, preserve ALL existing state
-            for key, value in state.items():
-                final_state[key] = value
-            
-            # Then, update with the final response changes
-            final_state.update(final_response_updates)
+            # --- PRESERVE ALL STATE ROBUSTLY ---
+            final_state = state.copy()  # Start with complete copy
+            final_state.update(final_response_updates)  # Add final response
             
             print(f"\n🧠 AGENT DEBUG - final response exit:")
             print(f"  Final state keys: {list(final_state.keys())}")
@@ -66,9 +84,7 @@ class TraceyAgent:
             final_response_updates = self._generate_final_response(state, "Analysis completed after thorough investigation")
             
             # Preserve state and add final response
-            final_state = {}
-            for key, value in state.items():
-                final_state[key] = value
+            final_state = state.copy()
             final_state.update(final_response_updates)
             
             return final_state
@@ -89,15 +105,10 @@ class TraceyAgent:
             # standardize output
             parsed_response = self._parse_agent_decision(response_content)
             
-            # --- THIS IS THE CRITICAL FIX ---
-            # Create final state by preserving ALL existing state and adding updates
-            final_state = {}
+            # --- CRITICAL FIX: Use state.copy() for robust state preservation ---
+            final_state = state.copy()  # This preserves ALL keys including spending_analysis
             
-            # First, preserve ALL existing state data
-            for key, value in state.items():
-                final_state[key] = value
-            
-            # Then, add agent's decision updates
+            # Then, add agent's decision updates WITHOUT overwriting existing keys
             if parsed_response.get("needs_tool"):
                 # agent decided it needs more information
                 tool_call = parsed_response["tool_call"]
@@ -105,7 +116,6 @@ class TraceyAgent:
                 final_state["current_analysis"] = parsed_response.get("reasoning", "Gathering additional data")
                 print(f"   - Agent Decision: {parsed_response['reasoning']}")
                 print(f"   - Tool Selected: {tool_call['tool']}")
-                
             elif parsed_response.get("ready_for_conclusion"):
                 # agent decided it has enough information to conclude
                 final_response = self._generate_autonomous_conclusion(state, parsed_response)
@@ -126,12 +136,16 @@ class TraceyAgent:
             print(f"  spending_analysis in returned state: {'spending_analysis' in final_state}")
             print(f"  tool_calls: {[call.get('tool', 'unknown') for call in final_state.get('tool_calls', [])]}")
             
-            # CRITICAL: Explicitly log what we're preserving
-            if 'spending_analysis' in state:
-                print(f"  🔥 PRESERVING spending_analysis: {bool(final_state.get('spending_analysis'))}")
-            if 'budget_optimization' in state:
-                print(f"  🔥 PRESERVING budget_optimization: {bool(final_state.get('budget_optimization'))}")
-            
+            # CRITICAL: Verify state preservation with emergency recovery
+            critical_keys = ['spending_analysis', 'budget_optimization', 'baseline_spending', 'deviation_detected', 'deviation_details']
+            for key in critical_keys:
+                if key in state:
+                    if key not in final_state:
+                        print(f"  ❌ CRITICAL: Lost {key} during agent processing!")
+                        final_state[key] = state[key]
+                        print(f"  🚨 EMERGENCY: Restored {key}")
+                    else:
+                        print(f"  ✅ PRESERVED {key}: {type(final_state[key]).__name__}")
             return final_state
             
         except Exception as e:
@@ -139,9 +153,7 @@ class TraceyAgent:
             final_response_updates = self._generate_final_response(state, f"Analysis error: {str(e)}")
             
             # Preserve state and add error response
-            final_state = {}
-            for key, value in state.items():
-                final_state[key] = value
+            final_state = state.copy()
             final_state.update(final_response_updates)
             
             return final_state
@@ -155,7 +167,7 @@ You must follow this Standard Operating Procedure (SOP) with precision:
 3.  **Analyze:** After categorizing, you MUST analyze spending against the budget using the `analyze_spending` tool.
 4.  **React to Analysis:** Review the result of `analyze_spending`.
     *   IF `deviation_detected` is `True`, your next step is to call the `optimize_budget` tool to create a reallocation plan.
-    *   AFTER a successful optimization, you MUST call the `research_tips` tool to find actionable advice for the category that had the highest overage.
+    *   AFTER a successful optimization, you MUST call the `research_tips` tool to find actionable advice for the categories that are overbudget.
     *   IF `deviation_detected` is `False`, your work is mostly done. You do not need to call `optimize_budget` or `research_tips`.
 5.  **Final Report:** Once you have completed all necessary steps according to this SOP and have no more tools to call, you will generate a final, comprehensive summary for the user.
 

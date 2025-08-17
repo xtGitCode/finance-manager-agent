@@ -7,6 +7,7 @@ class GraphState(TypedDict):
     transactions: List[Dict[str, Any]]
     budget: Dict[str, float]
     user_context: Dict[str, str]
+    baseline_spending: Dict[str, float]  # 🔥 CRITICAL: Add missing baseline_spending field
     
     # memory
     messages: List[Dict[str, str]]
@@ -18,6 +19,10 @@ class GraphState(TypedDict):
     research_queries: List[str]
     tool_calls: List[Dict[str, Any]]
     tool_results: List[Dict[str, Any]]
+    
+    # analysis results (🔥 CRITICAL: Add missing analysis fields)
+    spending_analysis: Optional[Dict[str, Any]]
+    budget_optimization: Optional[Dict[str, Any]]
     
     # final output
     final_plan: Optional[Dict[str, Any]]

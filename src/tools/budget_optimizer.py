@@ -42,7 +42,7 @@ class BudgetOptimizer:
     
     def analyze_and_optimize(self,
                            current_budget: Dict[str, float],
-                           total_spending: Dict[str, float],  # <-- NEW: receive total spending directly
+                           total_spending: Dict[str, float], 
                            transactions: List[Dict]) -> Dict:
         
         print(f"\n🔧 BUDGET_OPTIMIZER DEBUG:")
@@ -50,19 +50,18 @@ class BudgetOptimizer:
         print(f"  Total spending received: {total_spending}")
         print(f"  Transactions count: {len(transactions)}")
         
-        # SIMPLIFIED: Use the provided total spending directly (no more calculation)
         budget_status = {}
         for category in current_budget.keys():
-            spent_amount = total_spending.get(category, 0)  # <-- USE THE PROVIDED TOTAL
+            spent_amount = total_spending.get(category, 0)  
             budget_amount = current_budget[category]
             overage = spent_amount - budget_amount
             
             budget_status[category] = {
                 "budget": budget_amount,
-                "spent": spent_amount,  # <-- USE THE PROVIDED TOTAL
+                "spent": spent_amount, 
                 "overage": overage,
                 "utilization": (spent_amount / budget_amount) * 100 if budget_amount > 0 else 0,
-                "new_transactions": 0  # No longer relevant, set to 0
+                "new_transactions": 0  
             }
         
         print(f"  Budget status calculated: {budget_status}")

@@ -83,7 +83,7 @@ class PlaidTool:
                     merchant_name = t.merchant_name or t.name
                 
                 transactions.append({
-                    'transaction_id': t.transaction_id + f"_{random.randint(1000, 9999)}",  # Make IDs unique
+                    'transaction_id': t.transaction_id + f"_{random.randint(1000, 9999)}",  
                     'amount': round(adjusted_amount, 2),
                     'date': str(t.date),
                     'description': t.name,
@@ -100,7 +100,7 @@ class PlaidTool:
         print(f"\n🔧 ANALYZE_SPENDING DEBUG:")
         print(f"  Input transactions: {len(transactions)}")
         print(f"  Budget categories: {list(budget.keys())}")
-        print(f"  Baseline spending provided: {bool(baseline_spending)}")  # Add this for debugging
+        print(f"  Baseline spending provided: {bool(baseline_spending)}")  # for debugging
         
         if baseline_spending is None:
             baseline_spending = {}
@@ -110,7 +110,7 @@ class PlaidTool:
             print("  ❌ No transactions to analyze!")
             return {
                 "analysis_type": "spending_analysis",
-                "spending_by_category": baseline_spending.copy(),  # Return baseline if no new transactions
+                "spending_by_category": baseline_spending.copy(),  # return baseline if no new transactions
                 "deviation_detected": False,
                 "deviation_details": {}
             }
@@ -119,7 +119,6 @@ class PlaidTool:
         categorized_count = sum(1 for t in transactions if 'budget_category' in t)
         print(f"  Transactions with budget_category: {categorized_count}/{len(transactions)}")
         
-        # This part calculates spending from NEW transactions only
         new_spending_by_category = {}
         transaction_debug = []
         
@@ -134,16 +133,18 @@ class PlaidTool:
                 'description': txn.get('description', '')[:30]
             })
             
-            # FIXED: Include ALL transactions (positive AND negative) for accurate net spending
             new_spending_by_category[budget_category] = new_spending_by_category.get(budget_category, 0) + amount
-        
-        # --- THIS IS THE CRUCIAL NEW LOGIC ---
-        # Now, create the TOTAL spending by combining baseline and new spending
+
         total_spending_by_category = baseline_spending.copy()  # Start with the baseline
         for category, new_spend in new_spending_by_category.items():
             total_spending_by_category[category] = total_spending_by_category.get(category, 0) + new_spend
-        # --- END OF NEW LOGIC ---
-        
+
+        # 🔥 FIX: Ensure ALL budget categories are included BEFORE deviation detection
+        for budget_category in budget.keys():
+            if budget_category not in total_spending_by_category:
+                total_spending_by_category[budget_category] = baseline_spending.get(budget_category, 0)
+                print(f"  Added missing category {budget_category} with baseline spending: {baseline_spending.get(budget_category, 0)}")
+
         print(f"  Sample transactions: {len(transaction_debug)} total")
         print(f"  New transaction spending: {new_spending_by_category}")
         print(f"  Baseline spending: {baseline_spending}")
@@ -157,7 +158,7 @@ class PlaidTool:
         print(f"  Total spending: RM {sum(total_spending_by_category.values()):.2f}")
         
         deviations, total_overage = {}, 0
-        # Use the new total_spending_by_category for deviation check
+        # 🔥 NOW deviation detection will check ALL categories (including baseline-only ones)
         for category, spent in total_spending_by_category.items():
             budgeted = budget.get(category, 0)
             if budgeted > 0 and spent > budgeted:
@@ -174,12 +175,7 @@ class PlaidTool:
                     "patterns": patterns 
                 }
                 total_overage += overage
-        
-        # also check for budget categories with no spending
-        for budget_category in budget.keys():
-            if budget_category not in total_spending_by_category:
-                total_spending_by_category[budget_category] = baseline_spending.get(budget_category, 0)
-                print(f"  Added missing category {budget_category} with baseline spending: {baseline_spending.get(budget_category, 0)}")
+                print(f"  🚨 DEVIATION DETECTED: {category} - Spent: RM{spent:.2f}, Budget: RM{budgeted:.2f}, Overage: RM{overage:.2f}")
         
         print(f"  Final spending by category (with all budget categories): {total_spending_by_category}")
         print(f"  Deviations found: {list(deviations.keys())}")

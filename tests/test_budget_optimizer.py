@@ -8,20 +8,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 from tools.budget_optimizer import BudgetOptimizer
 
 class TestBudgetOptimizer:
-    """
-    test suite for the budgetoptimizer tool.
-    """
     def setup_method(self):
-        """
-        initializes a new budgetoptimizer instance before each test.
-        """
         self.optimizer = BudgetOptimizer()
     
     def test_budget_optimization_with_overspending(self):
-        """
-        tests that a reallocation is proposed when one category is overspent
-        and another has a surplus.
-        """
         # define a scenario where food is over budget and entertainment is under-utilized.
         current_budget = {
             "Housing": 1800,

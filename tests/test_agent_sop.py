@@ -69,11 +69,6 @@ class TestAgentSOPAdherence:
         assert tool_call["tool"] == "optimize_budget"
     
     def test_case_2_no_overspending_completes_analysis(self):
-        """
-        given a state where analysis is done and no deviation was found,
-        when the agent node is run,
-        then the analysis should be marked complete with no further tool calls.
-        """
         # arrange: create a state where analysis is done and no deviation was found.
         mock_state = {
             "user_context": {"name": "Test User", "location": "KL"},
@@ -141,9 +136,6 @@ class TestAgentSOPAdherence:
         assert is_complete_full is True
     
     def test_agent_prevents_infinite_loops(self):
-        """
-        tests that the agent halts and produces a final plan when the step limit is reached.
-        """
         # arrange: create a state that has reached the maximum step limit.
         mock_state = {
             "current_step": 10,
@@ -159,10 +151,6 @@ class TestAgentSOPAdherence:
         assert "final_plan" in result_state
     
     def test_agent_fallback_parsing_works(self):
-        """
-        tests that the agent can handle a malformed, non-json response from the llm
-        and fall back to a reasonable tool call.
-        """
         # arrange: create a state that requires a tool call.
         mock_state = {
             "current_step": 1,

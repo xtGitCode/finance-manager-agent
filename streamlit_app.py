@@ -9,7 +9,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 from src.main import FinancialGuardianSystem
 from simple_budget_view import create_budget_indicator
-from transaction_config import get_transaction_config
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -72,16 +71,15 @@ def main():
             import random
             st.session_state.baseline_spending = {}
             for category, budget_amount in budget.items():
-                # generate realistic random spending (20% to 80% of budget)
-                baseline_amount = budget_amount * random.uniform(0.2, 0.8)
+                baseline_amount = budget_amount * random.uniform(0.1, 0.8)
                 st.session_state.baseline_spending[category] = baseline_amount
+            print(f"Generated baseline spending: {st.session_state.baseline_spending}")
 
     col1, col2 = st.columns([2, 1])
     with col1:
         st.header("Dashboard")
         if st.button("Update Transactions", use_container_width=True):
-            txn_config = get_transaction_config('standard')
-            run_financial_analysis(user_context, budget, txn_config)
+            run_financial_analysis(user_context, budget)
         st.markdown("<hr style='margin-top: 2em; margin-bottom: 1em;'>", unsafe_allow_html=True)
         display_budget_dashboard(st.session_state.current_budget, st.session_state.spending_summary)
         if st.session_state.analysis_complete and st.session_state.guardian_result:
@@ -90,18 +88,17 @@ def main():
         st.header("Agent Logs")
         display_agent_log()
 
-def run_financial_analysis(user_context, budget, txn_config):
+def run_financial_analysis(user_context, budget):
     st.session_state.execution_log, st.session_state.analysis_complete, st.session_state.spending_summary = [], False, None
     progress_bar_placeholder, status_text = st.empty(), st.empty()
     baseline_spending = st.session_state.baseline_spending or {}
+    print(f"🔍 DEBUG: baseline_spending being passed to agent: {baseline_spending}")
     
     initial_state = { 
         "transactions": [], 
         "budget": budget, 
         "user_context": user_context, 
-        "transaction_config": txn_config, 
         "baseline_spending": baseline_spending,  
-        "new_transactions": {}, 
         "messages": [{"role": "user", "content": "Please analyze my budget for me."}], 
         "current_analysis": None, 
         "deviation_detected": False, 
@@ -109,12 +106,19 @@ def run_financial_analysis(user_context, budget, txn_config):
         "research_queries": [], 
         "tool_calls": [], 
         "tool_results": [], 
+        "spending_analysis": None,  
+        "budget_optimization": None,  
         "final_plan": None, 
         "budget_status": "unknown", 
         "recovery_recommendations": [], 
         "current_step": 0, 
         "max_steps": 4 
     }
+    
+    print(f"🔍 INITIAL STATE DEBUG:")
+    print(f"  Keys in initial_state: {list(initial_state.keys())}")
+    print(f"  baseline_spending in initial_state: {'baseline_spending' in initial_state}")
+    print(f"  baseline_spending value: {initial_state.get('baseline_spending', 'NOT FOUND')}")
     
     final_state, step_count, expected_steps = None, 0, 10  
     status_text.info(f"Starting Agent analysis...")
@@ -133,13 +137,40 @@ def run_financial_analysis(user_context, budget, txn_config):
         else: final_state = current_state; break
         time.sleep(0.8)
     progress_bar_placeholder.progress(1.0)
-    st.session_state.guardian_result, st.session_state.analysis_complete = final_state, True
-    spending_analysis = next((r for r in final_state.get("tool_results", []) if r.get("analysis_type") == "spending_analysis"), None)
-    if spending_analysis: st.session_state.spending_summary = spending_analysis.get("spending_by_category", {})
-    if final_state.get("final_plan", {}).get("budget_reallocation"):
-        st.session_state.current_budget = final_state["final_plan"]["budget_reallocation"]
-        st.success("Budget reallocated based on your spending patterns!")
-    status_text.success("Analysis complete! Check results below.")
+    st.session_state.guardian_result = final_state
+    st.session_state.analysis_complete = True
+    
+    # extract spending analysis data
+    spending_analysis = final_state.get("spending_analysis")
+    if spending_analysis and spending_analysis.get("spending_by_category"):
+        st.session_state.spending_summary = spending_analysis["spending_by_category"]
+        print(f"🔍 EXTRACTED spending_summary: {st.session_state.spending_summary}")
+    
+    # extract transactions for display
+    if final_state.get("transactions"):
+        st.session_state.final_transactions = final_state["transactions"]
+        print(f"🔍 EXTRACTED transactions: {len(final_state['transactions'])} items")
+    
+    # extract budget optimization results
+    budget_optimization = final_state.get("budget_optimization")
+    if budget_optimization and budget_optimization.get("optimization_needed"):
+        proposed_budget = budget_optimization.get("proposed_budget", {})
+        if proposed_budget:
+            st.session_state.current_budget = proposed_budget
+            st.success("📊 Budget optimized based on your spending patterns!")
+            print(f"🔍 UPDATED budget: {proposed_budget}")
+    
+    # show completion status
+    final_plan = final_state.get("final_plan", {})
+    status = final_plan.get("status", "unknown")
+    message = final_plan.get("message", "Analysis complete")
+    
+    if status == "alert":
+        status_text.warning(f"⚠️ {message}")
+    elif status == "good":
+        status_text.success(f"✅ {message}")
+    else:
+        status_text.info(f"📊 {message}")
     time.sleep(1); st.rerun()
 
 def create_detailed_log_entry(step_count, node_name, current_state):
@@ -275,13 +306,14 @@ def display_budget_dashboard(current_budget, spending_summary):
             baseline_spending1 = st.session_state.baseline_spending.get(category1, budget_amount1 * 0.5)
             new_transactions1 = spending_summary.get(category1, 0) if spending_summary is not None else 0
             
-            # Calculate total spending: baseline + new transactions (only if new transactions > 0)
+            # Calculate total spending: spending_summary IS the total (baseline + new transactions)
             if spending_summary is None:
                 # Before analysis: show baseline spending vs budget
                 create_budget_indicator(category1, budget_amount1, total_spent_amount=baseline_spending1, new_transactions_amount=0)
             else:
-                # After analysis: show baseline + new transactions (only add if > 0)
-                total_spent1 = baseline_spending1 + new_transactions1 if new_transactions1 > 0 else baseline_spending1
+                # After analysis: spending_summary contains TOTAL spending, not just new transactions
+                total_spent1 = spending_summary.get(category1, baseline_spending1)  # This IS the total from analysis
+                new_transactions1 = max(0, total_spent1 - baseline_spending1)       # Calculate new as difference
                 create_budget_indicator(category1, budget_amount1, total_spent_amount=total_spent1, new_transactions_amount=new_transactions1)
             
             st.markdown("<div style='margin-bottom: 2em;'></div>", unsafe_allow_html=True)
@@ -293,13 +325,14 @@ def display_budget_dashboard(current_budget, spending_summary):
                 baseline_spending2 = st.session_state.baseline_spending.get(category2, budget_amount2 * 0.5)
                 new_transactions2 = spending_summary.get(category2, 0) if spending_summary is not None else 0
                 
-                # Calculate total spending: baseline + new transactions (only if new transactions > 0)
+                # Calculate total spending: spending_summary IS the total (baseline + new transactions)
                 if spending_summary is None:
                     # Before analysis: show baseline spending vs budget
                     create_budget_indicator(category2, budget_amount2, total_spent_amount=baseline_spending2, new_transactions_amount=0)
                 else:
-                    # After analysis: show baseline + new transactions (only add if > 0)
-                    total_spent2 = baseline_spending2 + new_transactions2 if new_transactions2 > 0 else baseline_spending2
+                    # After analysis: spending_summary contains TOTAL spending, not just new transactions
+                    total_spent2 = spending_summary.get(category2, baseline_spending2)  # This IS the total from analysis
+                    new_transactions2 = max(0, total_spent2 - baseline_spending2)       # Calculate new as difference
                     create_budget_indicator(category2, budget_amount2, total_spent_amount=total_spent2, new_transactions_amount=new_transactions2)
                 
                 st.markdown("<div style='margin-bottom: 2em;'></div>", unsafe_allow_html=True)
@@ -344,9 +377,11 @@ def display_analysis_results(result):
         display_budget_optimization(optimization_result)
     
     display_transaction_summary(result)
-    # Removed display_key_metrics section
-    spending_analysis = next((r for r in result.get("tool_results", []) if r.get("analysis_type") == "spending_analysis"), None)
-    if spending_analysis: display_spending_charts(spending_analysis, result["budget"])
+    
+    # Display spending charts using the spending_analysis from final state
+    spending_analysis = result.get("spending_analysis")
+    if spending_analysis and spending_analysis.get("spending_by_category"):
+        display_spending_charts(spending_analysis, result.get("budget", {}))
     recommendations = final_plan.get("recommendations", [])
     if recommendations:
         st.subheader("Recommendations by Tracey")
@@ -357,50 +392,97 @@ def display_analysis_results(result):
                     if rec.get('source'): st.write(f"**Source:** [View Source]({rec['source']})")
 
 def display_transaction_summary(result):
-    spending_analysis = next((r for r in result.get("tool_results", []) if r.get("analysis_type") == "spending_analysis"), None)
-    all_transactions = result.get("transactions", [])
+    spending_analysis = result.get("spending_analysis")  # Get directly from final state
+    all_transactions = result.get("transactions", [])  # Get directly from final state
+    
+    # Also try to get from session state as backup
+    if not all_transactions and hasattr(st.session_state, 'final_transactions'):
+        all_transactions = st.session_state.final_transactions
+        
     if spending_analysis and all_transactions:
-        st.subheader("Transaction Summary")
+        st.subheader("💳 Transaction Summary")
         total_transactions = len(all_transactions)
-        col1, col2 = st.columns(2)
+        
+        # Show summary metrics
+        col1, col2, col3 = st.columns(3)
         col1.metric("Transactions Analyzed", f"{total_transactions}")
-        # Removed Total Amount Spent metric
-        st.markdown("---"); st.write("**Spending Breakdown by Category**")
-        def map_transaction_to_budget_category(transaction):
-            # Use the budget_category field added by categorization tool
-            budget_category = transaction.get('budget_category')
-            if budget_category:
-                return budget_category
-            # Fallback to original category mapping if budget_category is missing
-            raw_category = transaction.get('category', 'Other')
-            if raw_category in ["Housing", "Food", "Transportation", "Utilities", "Healthcare", "Entertainment"]: 
-                return raw_category
-            if raw_category == "Shopping": 
-                return "Entertainment"
-            return "Entertainment"
-        spending_data = spending_analysis.get("spending_by_category", {})
-        for category, total_spent_in_cat in spending_data.items():
-            with st.expander(f"{category} — Total Spent: RM {total_spent_in_cat:,.2f}"):
-                category_transactions = [t for t in all_transactions if map_transaction_to_budget_category(t) == category]
-                if not category_transactions: st.write("No individual transactions found."); continue
-                display_data = [{"Date": t.get('date'), "Description": t.get('description'), "Amount": t.get('amount')} for t in category_transactions]
+        
+        spending_by_category = spending_analysis.get("spending_by_category", {})
+        total_spending = sum(spending_by_category.values())
+        col2.metric("Total Spending", f"RM {total_spending:,.2f}")
+        
+        st.markdown("---")
+        st.write("**Spending Breakdown by Category**")
+        
+        for category, total_spent_in_cat in spending_by_category.items():
+            budget_amount = result.get("budget", {}).get(category, 0)
+            
+            # Color code the category based on budget status
+            category_title = f"{category} — Spent: RM {total_spent_in_cat:,.2f}"
+                
+            with st.expander(category_title):
+                category_transactions = [t for t in all_transactions if t.get('budget_category') == category]
+                if not category_transactions: 
+                    st.write("No individual transactions found.")
+                    continue
+                    
+                display_data = [{
+                    "Date": t.get('date'), 
+                    "Description": t.get('description'), 
+                    "Merchant": t.get('merchant_name', 'Unknown'),
+                    "Amount": f"RM {t.get('amount', 0):,.2f}"
+                } for t in category_transactions]
+                
                 df = pd.DataFrame(display_data)
-                df['Amount'] = df['Amount'].map('RM {:,.2f}'.format)
                 st.dataframe(df, use_container_width=True, hide_index=True)
+            
+    else:
+        st.info("No transaction data available. Click 'Update Transactions' to analyze your spending.")
 
 def display_spending_charts(spending_data, budget):
     st.subheader("Spending Analysis")
-    categories = list(spending_data["spending_by_category"].keys())
-    spending = list(spending_data["spending_by_category"].values())
+    
+    # Handle both old and new data structure
+    if isinstance(spending_data, dict) and "spending_by_category" in spending_data:
+        spending_by_category = spending_data["spending_by_category"]
+    else:
+        spending_by_category = spending_data
+    
+    categories = list(spending_by_category.keys())
+    spending = list(spending_by_category.values())
     budget_amounts = [budget.get(cat, 0) for cat in categories]
+    
     col1, col2 = st.columns(2)
+    
     with col1:
-        fig_bar = go.Figure(data=[ go.Bar(name='Budget', x=categories, y=budget_amounts, marker_color='lightblue'), go.Bar(name='Actual Spending', x=categories, y=spending, marker_color=['#dc3545' if s > b else '#0d6efd' for s, b in zip(spending, budget_amounts)]) ])
-        fig_bar.update_layout(title="Budget vs Actual Spending", yaxis_title="Amount (RM)", barmode='group', height=400)
+        fig_bar = go.Figure(data=[ 
+            go.Bar(name='Budget', x=categories, y=budget_amounts, marker_color='lightblue'), 
+            go.Bar(name='Actual Spending', x=categories, y=spending, 
+                   marker_color=['#dc3545' if s > b else '#28a745' for s, b in zip(spending, budget_amounts)]) 
+        ])
+        fig_bar.update_layout(
+            title="Budget vs Actual Spending", 
+            yaxis_title="Amount (RM)", 
+            barmode='group', 
+            height=400,
+            showlegend=True
+        )
         st.plotly_chart(fig_bar, use_container_width=True)
+    
     with col2:
-        fig_pie = px.pie(values=spending, names=categories, title="Spending Distribution", height=400)
-        st.plotly_chart(fig_pie, use_container_width=True)
+        # Only show positive spending values in pie chart
+        positive_spending = [(cat, amt) for cat, amt in zip(categories, spending) if amt > 0]
+        if positive_spending:
+            pie_categories, pie_values = zip(*positive_spending)
+            fig_pie = px.pie(
+                values=pie_values, 
+                names=pie_categories, 
+                title="Spending Distribution", 
+                height=400
+            )
+            st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.info("No positive spending to display in pie chart.")
 
 def display_budget_optimization(optimization):
     
@@ -415,7 +497,7 @@ def display_budget_optimization(optimization):
     
     recommendations = optimization.get("recommendations", [])
     if recommendations:
-        st.subheader("Recommended Budget Adjustments")
+        st.subheader("Budget Adjustments")
         
         total_reallocation = optimization.get("total_reallocation", 0)
         

@@ -2,10 +2,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 def create_budget_indicator(category, budgeted_amount, total_spent_amount=None, new_transactions_amount=0):
-    """
-    Creates a simple, clean progress bar indicator for a budget category
-    showing cumulative spending (baseline + new transactions) with breakdown.
-    """
     
     # total_spent_amount should always be provided now from streamlit_app.py
     if total_spent_amount is None:
