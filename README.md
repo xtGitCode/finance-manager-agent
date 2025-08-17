@@ -1,4 +1,4 @@
-# Autonomous Financial Guardian - Tracey
+# Personal Finance Agent - Tracey
 
 Access streamlit demo here: [Financial Guardian - Tracey](https://tracey-finance.streamlit.app/)
 
