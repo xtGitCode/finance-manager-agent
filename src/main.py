@@ -153,7 +153,8 @@ class FinancialGuardianSystem:
             }
         
         elif tool_name == "research_tips":
-            return self._execute_autonomous_research(args, state)
+            research_result = self._execute_autonomous_research(args, state)
+            return {"tool": "research_tips", **research_result}
         
         elif tool_name == "optimize_budget":
             analysis_result = state.get("spending_analysis", {})

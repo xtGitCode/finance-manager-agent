@@ -378,18 +378,43 @@ def display_analysis_results(result):
     
     display_transaction_summary(result)
     
-    # Display spending charts using the spending_analysis from final state
+    # display spending charts using the spending_analysis from final state
     spending_analysis = result.get("spending_analysis")
     if spending_analysis and spending_analysis.get("spending_by_category"):
         display_spending_charts(spending_analysis, result.get("budget", {}))
-    recommendations = final_plan.get("recommendations", [])
-    if recommendations:
+
+    final_plan = result.get("final_plan", {})
+    budget_recommendations = final_plan.get("budget_recommendations", [])
+    research_recommendations = final_plan.get("research_recommendations", [])
+    if not budget_recommendations and not research_recommendations:
+        all_recommendations = final_plan.get("recommendations", [])
+        print(f"  Using fallback combined list: {len(all_recommendations)}")
+        # Try to separate them based on structure
+        for rec in all_recommendations:
+            if 'from_category' in rec and 'to_category' in rec:
+                budget_recommendations.append(rec)
+            elif 'action' in rec or 'description' in rec:
+                research_recommendations.append(rec)
+        print(f"  After separation - Budget: {len(budget_recommendations)}, Research: {len(research_recommendations)}")
+    
+    # display research tips
+    if research_recommendations:
         st.subheader("Recommendations by Tracey")
-        for i, rec in enumerate(recommendations, 1):
-            if isinstance(rec, dict):
-                with st.expander(f"Recommendation {i}: {rec.get('action', 'View Details')}"):
-                    st.write(f"**Description:** {rec.get('description', 'No description')}")
-                    if rec.get('source'): st.write(f"**Source:** [View Source]({rec['source']})")
+        st.info(f"Tracey researched {len(research_recommendations)} actionable tips to help you save money.")
+        
+        for i, rec in enumerate(research_recommendations, 1):
+            action = rec.get('action', 'Financial Tip')
+            description = rec.get('description', 'No description available')
+            source = rec.get('source', '')
+            
+            with st.expander(f"Tip #{i}: {action}"):
+                st.write(f"**Recommendation:** {description}")
+                if source: 
+                    st.write(f"**Source:** [View More Details]({source})")
+    
+    # Show message if no recommendations
+    if not budget_recommendations and not research_recommendations:
+        st.info("No specific recommendations needed - your budget appears to be well-balanced!")
 
 def display_transaction_summary(result):
     spending_analysis = result.get("spending_analysis")  # Get directly from final state
@@ -500,18 +525,7 @@ def display_budget_optimization(optimization):
         st.subheader("Budget Adjustments")
         
         total_reallocation = optimization.get("total_reallocation", 0)
-        
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.metric("Total Budget Reallocation", f"RM {total_reallocation:.0f}")
-        with col2:
-            if st.button("Accept Optimization", type="primary"):
-                # Apply the proposed budget
-                proposed_budget = optimization.get("proposed_budget", {})
-                if proposed_budget:
-                    st.session_state.current_budget = proposed_budget
-                    st.success("Budget optimization applied successfully!")
-                    st.rerun()
+        st.metric("Total Budget Reallocation", f"RM {total_reallocation:.0f}")
         
         st.markdown("### Transfer Details")
         
@@ -569,8 +583,6 @@ def display_budget_optimization(optimization):
         
         for reason in set(reasons):  # Remove duplicates
             st.write(reason)
-        
-        st.info("**Tip:** This optimization maintains your essential spending while accommodating your actual usage patterns. You can always adjust manually later.")
 
 if __name__ == "__main__":
     main()

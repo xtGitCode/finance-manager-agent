@@ -41,6 +41,18 @@ class TraceyAgent:
         print(f"    Optimization attempted: {has_optimization}")
         print(f"    Research completed: {has_research}")
         
+        # check for duplicate tool calls in recent steps to prevent loops
+        recent_tools = [result.get("tool") for result in state.get("tool_results", [])[-4:]]
+        tool_counts = {}
+        for tool in recent_tools:
+            tool_counts[tool] = tool_counts.get(tool, 0) + 1
+        
+        # if we've run the same tool more than twice recently, force completion
+        for tool, count in tool_counts.items():
+            if count >= 2:
+                print(f"    ✅ Complete: Detected tool repetition ({tool} run {count} times)")
+                return True
+        
         # For deviations: we need BOTH optimization attempt AND research
         if has_optimization and has_research:
             print(f"    ✅ Complete: Both optimization and research completed")
@@ -104,11 +116,7 @@ class TraceyAgent:
             
             # standardize output
             parsed_response = self._parse_agent_decision(response_content)
-            
-            # --- CRITICAL FIX: Use state.copy() for robust state preservation ---
-            final_state = state.copy()  # This preserves ALL keys including spending_analysis
-            
-            # Then, add agent's decision updates WITHOUT overwriting existing keys
+            final_state = state.copy()  
             if parsed_response.get("needs_tool"):
                 # agent decided it needs more information
                 tool_call = parsed_response["tool_call"]
@@ -141,11 +149,7 @@ class TraceyAgent:
             for key in critical_keys:
                 if key in state:
                     if key not in final_state:
-                        print(f"  ❌ CRITICAL: Lost {key} during agent processing!")
                         final_state[key] = state[key]
-                        print(f"  🚨 EMERGENCY: Restored {key}")
-                    else:
-                        print(f"  ✅ PRESERVED {key}: {type(final_state[key]).__name__}")
             return final_state
             
         except Exception as e:
@@ -281,14 +285,22 @@ Remember: Your goal is immediate cash flow rebalancing when overspending occurs.
         key_insights = parsed_response.get("key_insights", [])
         recommendations = parsed_response.get("recommendations", [])
         
-        # enchance with any research recommendations from tool results
-        research_results = [
-            result for result in state.get("tool_results", []) 
-            if "recommendations" in result and result.get("recommendations")
-        ]
+        # 🔧 FIX: Collect BOTH budget optimization AND research recommendations
+        budget_recommendations = []
+        research_recommendations = []
         
-        if research_results:
-            recommendations.extend(research_results[0]["recommendations"])
+        for result in state.get("tool_results", []):
+            if result.get("tool") == "optimize_budget" and "recommendations" in result:
+                budget_recommendations.extend(result["recommendations"])
+                print(f"  📊 Found {len(result['recommendations'])} budget optimization recommendations")
+            elif result.get("tool") == "research_tips" and "recommendations" in result:
+                research_recommendations.extend(result["recommendations"])
+                print(f"  🔍 Found {len(result['recommendations'])} research recommendations")
+                print(f"  🔍 Research recommendations: {result['recommendations'][:2]}")
+                print(f"  🔍 Research recommendations: {result['recommendations'][:2]}")
+        
+        # Combine both types of recommendations
+        all_recommendations = budget_recommendations + research_recommendations + recommendations
         
         # build status message
         if status == "alert":
@@ -303,7 +315,9 @@ Remember: Your goal is immediate cash flow rebalancing when overspending occurs.
         return {
             "status": status,
             "message": message,
-            "recommendations": recommendations,
+            "recommendations": all_recommendations,
+            "budget_recommendations": budget_recommendations,  # 🔧 NEW: Separate budget recommendations
+            "research_recommendations": research_recommendations,  # 🔧 NEW: Separate research recommendations
             "insights": key_insights,
             "reasoning_history": self.reasoning_history
         }
@@ -324,19 +338,27 @@ Remember: Your goal is immediate cash flow rebalancing when overspending occurs.
         if reason:
             message += f" ({reason})"
         
-        # include any research recommendations
-        recommendations = []
-        research_results = [
-            result for result in state.get("tool_results", []) 
-            if "recommendations" in result and result.get("recommendations")
-        ]
-        if research_results:
-            recommendations = research_results[0]["recommendations"]
+        # 🔧 FIX: Collect BOTH budget optimization AND research recommendations
+        budget_recommendations = []
+        research_recommendations = []
+        
+        for result in state.get("tool_results", []):
+            if result.get("tool") == "optimize_budget" and "recommendations" in result:
+                budget_recommendations.extend(result["recommendations"])
+                print(f"  📊 Found {len(result['recommendations'])} budget optimization recommendations")
+            elif result.get("tool") == "research_tips" and "recommendations" in result:
+                research_recommendations.extend(result["recommendations"])
+                print(f"  🔍 Found {len(result['recommendations'])} research recommendations")
+        
+        # Combine both types of recommendations
+        all_recommendations = budget_recommendations + research_recommendations
         
         final_plan = {
             "status": status,
             "message": message,
-            "recommendations": recommendations,
+            "recommendations": all_recommendations,
+            "budget_recommendations": budget_recommendations,  # 🔧 NEW: Separate budget recommendations
+            "research_recommendations": research_recommendations,  # 🔧 NEW: Separate research recommendations
             "reasoning_history": self.reasoning_history
         }
         
