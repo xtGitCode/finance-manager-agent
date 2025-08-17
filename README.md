@@ -1,22 +1,24 @@
 # Autonomous Financial Guardian - Tracey
 
-An intelligent financial analysis system that demonstrates advanced agentic AI capabilities through autonomous financial monitoring and research-backed decision making. This system serves as a comprehensive investigation into the core components and characteristics of modern AI agents.
+Access streamlit demo here: [Financial Guardian - Tracey](https://tracey-finance.streamlit.app/)
+
+An intelligent financial analysis system that demonstrates agentic AI capabilities through autonomous financial monitoring and research-backed decision making. This system serves as a comprehensive investigation into the core components and characteristics of modern AI agents.
 
 ## What This System Does
 
-The Financial Guardian is an AI agent named Tracey that acts as your personal financial analyst. Unlike traditional budgeting apps that simply track expenses, Tracey autonomously analyzes your financial behavior, detects spending patterns, and provides intelligent recommendations to optimize your budget allocation.
+The Financial Guardian is an AI agent named Tracey that acts as your personal financial analyst. Unlike traditional budgeting apps that simply track expenses, Tracey autonomously retrieves your transactions, detects spending patterns, and provides recommendations to optimize your budget allocation.
 
 ### Core Components using Agentic AI
 
-**1. Autonomous Reasoning Engine**
+**1. Reasoning Engine**
 - **Implementation**: TraceyAgent with LangGraph state management
-- **Characteristic**: Makes independent decisions through reasoning rather than following pre-programmed rules
-- **Evidence**: Agent dynamically decides which tools to use based on analysis context, not hardcoded logic
+- **Characteristic**: Makes independent decisions through reasoning rather than rule-based workflow
+- **Evidence**: Agent dynamically decides which tools to use based on analysis context
 
 **2. Cyclical Decision-Making (ReAct Loop)**
 - **Implementation**: Reason → Act → Reason continuous cycle
 - **Characteristic**: Agent can reconsider previous decisions with new information
-- **Evidence**: After gathering transaction data, agent may decide additional research is needed based on findings
+- **Evidence**: After gathering transaction data, agent may decide additional tool calls is needed based on findings
 
 **3. Tool Orchestration & Selection**
 - **Implementation**: Dynamic selection from Plaid API, categorization, analysis, optimization, and research tools
@@ -26,36 +28,7 @@ The Financial Guardian is an AI agent named Tracey that acts as your personal fi
 **4. Memory Management**
 - **Implementation**: GraphState with simple chronological history
 - **Characteristic**: Maintains context across reasoning cycles without information overload
-- **Evidence**: Research-backed "Simple Memory" approach proven more effective than complex summarization
-
-**5. Goal-Oriented Behavior**
-- **Implementation**: Financial optimization through budget reallocation and recommendation generation
-- **Characteristic**: Works toward user objectives while adapting methods based on discovered patterns
-- **Evidence**: Different optimization strategies for different spending patterns (large expenses vs. frequent small purchases)
-
-### Research-Backed Design Principles
-
-Implemented based on "Efficient Agents: Building Effective Agents While Reducing Cost" research:
-
-**Simple Memory Architecture**
-- Finding: Complex memory systems add cost without performance gain
-- Implementation: Chronological transaction history in GraphState
-- Benefit: Optimal cost-performance balance proven by academic research
-
-**Query Expansion Strategy**
-- Finding: Reformulating queries improves information retrieval
-- Implementation: Multiple targeted searches for cost-saving recommendations
-- Benefit: Higher quality, more diverse research results
-
-**Moderate Planning Complexity**
-- Finding: Excessive planning steps increase cost without benefit
-- Implementation: 3-4 step optimization plans with clear priorities
-- Benefit: Avoids "overthinking" problem while maintaining effectiveness
-
-**Cost-Performance Optimization**
-- Finding: LLM backbone is biggest cost factor
-- Implementation: Llama 3 via Groq for optimal balance
-- Benefit: Strong reasoning capabilities at fraction of cost
+- **Evidence**:  Based on research, "Simple Memory" approach is proven more effective than complex summarization
 
 ## How the System Works
 
