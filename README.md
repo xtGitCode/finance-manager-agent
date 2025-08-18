@@ -2,8 +2,6 @@
 
 Access streamlit demo here: [Financial Guardian - Tracey](https://tracey-finance.streamlit.app/)
 
-An intelligent financial analysis system that demonstrates agentic AI capabilities through autonomous financial monitoring and research-backed decision making. This system serves as a comprehensive investigation into the core components and characteristics of modern AI agents.
-
 ## What This System Does
 
 The Financial Guardian is an AI agent named Tracey that acts as your personal financial analyst. Unlike traditional budgeting apps that simply track expenses, Tracey autonomously retrieves your transactions, detects spending patterns, and provides recommendations to optimize your budget allocation.
