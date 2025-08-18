@@ -9,26 +9,21 @@ An intelligent financial analysis system that demonstrates agentic AI capabiliti
 The Financial Guardian is an AI agent named Tracey that acts as your personal financial analyst. Unlike traditional budgeting apps that simply track expenses, Tracey autonomously retrieves your transactions, detects spending patterns, and provides recommendations to optimize your budget allocation.
 
 ### Core Components using Agentic AI
+**High Level Overview**
+![High Level Overview](high_level_overview.png)
 
 **1. Reasoning Engine**
-- **Implementation**: TraceyAgent with LangGraph state management
-- **Characteristic**: Makes independent decisions through reasoning rather than rule-based workflow
-- **Evidence**: Agent dynamically decides which tools to use based on analysis context
+- I built the core of the system on LangGraph to create a true reasoning engine. This allows the agent to make its own decisions, like dynamically choosing to use a research tool only after it has analyzed the data and found a problem, which is a big step up from a rigid, rule-based workflow.
 
 **2. Cyclical Decision-Making (ReAct Loop)**
-- **Implementation**: Reason → Act → Reason continuous cycle
-- **Characteristic**: Agent can reconsider previous decisions with new information
-- **Evidence**: After gathering transaction data, agent may decide additional tool calls is needed based on findings
+- Reason → Act → Reason continuous cycle
+- allows the agent to re-evaluate the situation after every action. For instance, once it gets transaction data, it loops back to the reasoning step to decide what to do with that new information, rather than just moving down a fixed path.
 
 **3. Tool Orchestration & Selection**
-- **Implementation**: Dynamic selection from Plaid API, categorization, analysis, optimization, and research tools
-- **Characteristic**: Contextual tool usage rather than sequential execution
-- **Evidence**: Agent chooses research tools only when budget deviations are detected, not for every analysis
+- It has access to Plaid for data, analysis functions, and web research, but it selects them contextually. It won't waste resources on a research call unless it has already run an analysis and found a specific deviation that needs a solution.
 
 **4. Memory Management**
-- **Implementation**: GraphState with simple chronological history
-- **Characteristic**: Maintains context across reasoning cycles without information overload
-- **Evidence**:  Based on research, "Simple Memory" approach is proven more effective than complex summarization
+- Based on research, "Simple Memory" approach is proven more effective than complex summarization. Implemented using LangGraph's GraphState with simple chronological history to store and retrieve previous interactions without information overload.
 
 ## How the System Works
 
