@@ -301,8 +301,8 @@ Remember: Your goal is immediate cash flow rebalancing when overspending occurs.
             "status": status,
             "message": message,
             "recommendations": all_recommendations,
-            "budget_recommendations": budget_recommendations,  # 🔧 NEW: Separate budget recommendations
-            "research_recommendations": research_recommendations,  # 🔧 NEW: Separate research recommendations
+            "budget_recommendations": budget_recommendations,  
+            "research_recommendations": research_recommendations, 
             "insights": key_insights,
             "reasoning_history": self.reasoning_history
         }
@@ -323,33 +323,30 @@ Remember: Your goal is immediate cash flow rebalancing when overspending occurs.
         if reason:
             message += f" ({reason})"
         
-        # 🔧 FIX: Collect BOTH budget optimization AND research recommendations
+        # collect budget optimization and research recommendations
         budget_recommendations = []
         research_recommendations = []
         
         for result in state.get("tool_results", []):
             if result.get("tool") == "optimize_budget" and "recommendations" in result:
                 budget_recommendations.extend(result["recommendations"])
-                print(f"  📊 Found {len(result['recommendations'])} budget optimization recommendations")
             elif result.get("tool") == "research_tips" and "recommendations" in result:
                 research_recommendations.extend(result["recommendations"])
-                print(f"  🔍 Found {len(result['recommendations'])} research recommendations")
-        
-        # Combine both types of recommendations
+    
         all_recommendations = budget_recommendations + research_recommendations
         
         final_plan = {
             "status": status,
             "message": message,
             "recommendations": all_recommendations,
-            "budget_recommendations": budget_recommendations,  # 🔧 NEW: Separate budget recommendations
-            "research_recommendations": research_recommendations,  # 🔧 NEW: Separate research recommendations
+            "budget_recommendations": budget_recommendations,  
+            "research_recommendations": research_recommendations,  
             "reasoning_history": self.reasoning_history
         }
         
-        # Return only the changes to be merged with the existing state
+        # return only the changes to be merged with the existing state
         return {
             "final_plan": final_plan,
             "budget_status": status,
-            "tool_calls": []  # Clear tool calls to signal completion
+            "tool_calls": []  
         }

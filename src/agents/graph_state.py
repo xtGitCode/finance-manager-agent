@@ -1,4 +1,3 @@
-# src/agents/graph_state.py
 from typing import TypedDict, List, Dict, Optional, Any
 from datetime import datetime
 
@@ -7,7 +6,7 @@ class GraphState(TypedDict):
     transactions: List[Dict[str, Any]]
     budget: Dict[str, float]
     user_context: Dict[str, str]
-    baseline_spending: Dict[str, float]  # 🔥 CRITICAL: Add missing baseline_spending field
+    baseline_spending: Dict[str, float] 
     
     # memory
     messages: List[Dict[str, str]]
@@ -19,8 +18,6 @@ class GraphState(TypedDict):
     research_queries: List[str]
     tool_calls: List[Dict[str, Any]]
     tool_results: List[Dict[str, Any]]
-    
-    # analysis results (🔥 CRITICAL: Add missing analysis fields)
     spending_analysis: Optional[Dict[str, Any]]
     budget_optimization: Optional[Dict[str, Any]]
     

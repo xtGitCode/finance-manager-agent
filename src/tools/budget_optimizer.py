@@ -288,7 +288,7 @@ class BudgetOptimizer:
         from_relations = self.category_relationships.get(from_category, {})
         to_relations = self.category_relationships.get(to_category, {})
         
-        # base reasoning on transfer difficulty and category types
+        # template reasoning on transfer difficulty and category types
         if from_relations.get("transfer_difficulty") == "easy":
             flexibility_note = f"{from_category} typically has flexible spending that can be adjusted"
         elif from_relations.get("transfer_difficulty") == "medium":

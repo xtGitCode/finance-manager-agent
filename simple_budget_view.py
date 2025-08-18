@@ -5,7 +5,6 @@ def create_budget_indicator(category, budgeted_amount, total_spent_amount=None, 
     
     # total_spent_amount should always be provided now from streamlit_app.py
     if total_spent_amount is None:
-        # Fallback - should rarely happen
         total_spent_amount = budgeted_amount * 0.5
 
     # how much over the original budget we are
