@@ -15,83 +15,38 @@ class TraceyAgent:
         )
         self.reasoning_history = []
     
-    def _is_analysis_complete(self, state: GraphState) -> bool:
-        tools_run = {result.get("tool") for result in state.get("tool_results", []) if result.get("tool")}
-        deviation_detected = state.get("deviation_detected", False)
+    def _should_agent_continue(self, state: GraphState) -> bool:
         current_step = state.get("current_step", 0)
         
-        print(f"  🔍 COMPLETION CHECK - Step {current_step}:")
-        print(f"    Tools run so far: {tools_run}")
-        print(f"    Deviation detected: {deviation_detected}")
-
-        # Always need spending analysis first
-        if "analyze_spending" not in tools_run:
-            print(f"    ❌ Not complete: analyze_spending not run")
+        # safety limits 
+        if current_step >= 10:
+            print(f"    ⚠️ Safety limit reached at step {current_step}")
             return False
-
-        # If no deviation, we're done after analysis
-        if not deviation_detected:
-            print(f"    ✅ Complete: No deviations detected")
-            return True
-        
-        # If deviation detected, we need optimization attempts and research
-        has_optimization = "optimize_budget" in tools_run
-        has_research = "research_tips" in tools_run
-        
-        print(f"    Optimization attempted: {has_optimization}")
-        print(f"    Research completed: {has_research}")
-        
-        # check for duplicate tool calls in recent steps to prevent loops
+            
+        # Check for tool repetition loops
         recent_tools = [result.get("tool") for result in state.get("tool_results", [])[-4:]]
         tool_counts = {}
         for tool in recent_tools:
             tool_counts[tool] = tool_counts.get(tool, 0) + 1
         
-        # if we've run the same tool more than twice recently, force completion
         for tool, count in tool_counts.items():
-            if count >= 2:
-                print(f"    ✅ Complete: Detected tool repetition ({tool} run {count} times)")
-                return True
+            if count >= 3:  
+                print(f"    ⚠️ Tool repetition detected ({tool} run {count} times)")
+                return False
         
-        # For deviations: we need BOTH optimization attempt AND research
-        if has_optimization and has_research:
-            print(f"    ✅ Complete: Both optimization and research completed")
-            return True
-            
-        # Safety: If we've done too many steps, force completion
-        if current_step >= 8:  # Reduced from 10 to prevent infinite loops
-            print(f"    ⚠️ Complete: Safety limit reached at step {current_step}")
-            return True
-            
-        print(f"    ⏳ Not complete: Need optimization({has_optimization}) and research({has_research})")
-        return False
+        return True
     
     def agent_node(self, state: GraphState) -> GraphState:
         current_step = state.get("current_step", 0)
         
-        # Check if analysis is complete according to SOP
-        if self._is_analysis_complete(state):
-            print("🧠 Agent: SOP complete. Generating final response.")
-            # Generate final response and preserve state
-            final_response_updates = self._generate_final_response(state, "Analysis completed successfully")
-            
-            # --- PRESERVE ALL STATE ROBUSTLY ---
-            final_state = state.copy()  # Start with complete copy
-            final_state.update(final_response_updates)  # Add final response
-            
-            
-            return final_state
-        
-        # safety check to avoid infinity loops, max steps = 10
-        if current_step >= 10:
-            print("   - Agent: Reached step limit, providing final analysis")
-            final_response_updates = self._generate_final_response(state, "Analysis completed after thorough investigation")
-            
-            # Preserve state and add final response
+        # Check safety limits first
+        if not self._should_agent_continue(state):
+            final_response_updates = self._generate_final_response(state, "Analysis completed with safety limits")
             final_state = state.copy()
             final_state.update(final_response_updates)
-            
             return final_state
+        
+
         
         # log reasoning step
         reasoning_step = f"Step {current_step + 1}: Analyzing financial state"
@@ -112,22 +67,35 @@ class TraceyAgent:
             if parsed_response.get("needs_tool"):
                 # agent decided it needs more information
                 tool_call = parsed_response["tool_call"]
+                agent_reasoning = parsed_response.get("reasoning", "Gathering additional data")
+                
                 final_state["tool_calls"] = [tool_call]
-                final_state["current_analysis"] = parsed_response.get("reasoning", "Gathering additional data")
-                print(f"   - Agent Decision: {parsed_response['reasoning']}")
+                final_state["current_analysis"] = agent_reasoning
+                final_state["agent_reasoning"] = agent_reasoning  # Store for Streamlit
+                final_state["agent_decision_type"] = "tool_call"
+                
+                print(f"   - Agent Decision: {agent_reasoning}")
                 print(f"   - Tool Selected: {tool_call['tool']}")
             elif parsed_response.get("ready_for_conclusion"):
                 # agent decided it has enough information to conclude
+                agent_reasoning = parsed_response.get("reasoning", "Analysis complete")
+                
                 final_response = self._generate_autonomous_conclusion(state, parsed_response)
                 final_state["final_plan"] = final_response
                 final_state["budget_status"] = final_response["status"]
                 final_state["tool_calls"] = []  # Clear tool calls to signal completion
-                print(f"   - Agent Conclusion: {parsed_response.get('reasoning', 'Analysis complete')}")
+                final_state["agent_reasoning"] = agent_reasoning  # Store for Streamlit
+                final_state["agent_decision_type"] = "conclusion"
+                
+                print(f"   - Agent Conclusion: {agent_reasoning}")
             
             else:
                 # fallback
-                final_response_updates = self._generate_final_response(state, "Unable to determine next action")
+                fallback_reasoning = "Unable to determine next action"
+                final_response_updates = self._generate_final_response(state, fallback_reasoning)
                 final_state.update(final_response_updates)
+                final_state["agent_reasoning"] = fallback_reasoning
+                final_state["agent_decision_type"] = "fallback"
             
             final_state["current_step"] = current_step + 1
             critical_keys = ['spending_analysis', 'budget_optimization', 'baseline_spending', 'deviation_detected', 'deviation_details']
@@ -148,82 +116,115 @@ class TraceyAgent:
             return final_state
     
     def _build_autonomous_system_prompt(self) -> SystemMessage:
-        prompt = """You are Tracey, an expert financial analyst agent. Your goal is to conduct a complete financial analysis for the user based on their new transactions.
+        prompt = """
+        You are Tracey, an expert financial analyst agent. Your goal is to help users understand their financial situation and 
+        provide valuable, actionable advice.
 
-You must follow this Standard Operating Procedure (SOP) with precision:
-1.  **Fetch Data:** Always start by getting the user's transactions using the `get_transactions` tool. Do not proceed without transaction data.
-2.  **Process Data:** Once you have transactions, you MUST categorize them using the `categorize_transactions` tool.
-3.  **Analyze:** After categorizing, you MUST analyze spending against the budget using the `analyze_spending` tool.
-4.  **React to Analysis:** Review the result of `analyze_spending`.
-    *   IF `deviation_detected` is `True`, your next step is to call the `optimize_budget` tool to create a reallocation plan.
-    *   AFTER a successful optimization, you MUST call the `research_tips` tool to find actionable advice for the categories that are overbudget.
-    *   IF `deviation_detected` is `False`, your work is mostly done. You do not need to call `optimize_budget` or `research_tips`.
-5.  **Final Report:** Once you have completed all necessary steps according to this SOP and have no more tools to call, you will generate a final, comprehensive summary for the user.
+        Available tools:
+        - get_transactions: Retrieve recent transaction data from financial accounts
+        - categorize_transactions: Classify transactions into budget categories for analysis
+        - analyze_spending: Compare actual spending against budget and identify issues
+        - optimize_budget: Suggest budget reallocations based on spending patterns
+        - research_tips: Find relevant money-saving recommendations for specific situations
 
-RESPONSE FORMAT:
-Respond with JSON containing either:
+        Your approach should be thoughtful and adaptive. For each step, consider:
+        1. What information do I currently have about this user's financial situation?
+        2. What's missing that would help me provide better advice?
+        3. What would be most valuable for this specific user right now?
+        4. Have I gathered sufficient insights to make meaningful recommendations?
 
-For tool usage:
-{
-  "needs_tool": true,
-  "reasoning": "Why you need this specific tool",
-  "tool_call": {
-    "tool": "tool_name",
-    "args": {relevant_arguments}
-  }
-}
+        Reasoning examples:
+        - "I need transaction data before I can analyze anything" → get_transactions
+        - "I have transactions but they're uncategorized, so I can't identify spending patterns" → categorize_transactions  
+        - "I need to understand if there are any budget concerns" → analyze_spending
+        - "User is overspending significantly, I should help them rebalance their budget" → optimize_budget
+        - "User needs practical advice for their specific overspending areas" → research_tips
+        - "I have sufficient information to provide a comprehensive financial assessment" → conclude
 
-For final analysis:
-{
-  "ready_for_conclusion": true,
-  "reasoning": "Analysis complete",
-  "status": "alert" if overspending detected, otherwise "good",
-  "key_insights": ["Key findings from analysis"],
-  "recommendations": ["Actionable recommendations"]
-}
+        RESPONSE FORMAT:
+        Respond with JSON containing either:
 
-Remember: Follow the SOP precisely and use the tools in the correct sequence."""
+        For tool usage:
+        {
+        "needs_tool": true,
+        "reasoning": "Your thought process about why this tool is needed now",
+        "tool_call": {
+            "tool": "tool_name",
+            "args": {relevant_arguments}
+        }
+        }
+
+        For final analysis:
+        {
+        "ready_for_conclusion": true,
+        "reasoning": "Why you believe you have sufficient information to help the user",
+        "status": "alert" if spending concerns detected, otherwise "good",
+        "key_insights": ["Key findings from your analysis"],
+        "recommendations": ["Actionable advice for the user"]
+        }
+
+        Base your decisions on the specific situation, not rigid rules."""
 
         return SystemMessage(content=prompt)
     
     def _format_analysis_context(self, state: GraphState) -> List[HumanMessage]:
-        # Build MINIMAL context to avoid token limits
+        # Build rich context for reasoning
+        user_context = state.get("user_context", {})
+        transactions = state.get("transactions", [])
+        budget = state.get("budget", {})
+        tool_results = state.get("tool_results", [])
+        
+        # Determine current data status
+        has_transactions = len(transactions) > 0
+        is_categorized = has_transactions and "budget_category" in transactions[0] if transactions else False
+        has_analysis = state.get("spending_analysis") is not None
+        deviation_detected = state.get("deviation_detected", False)
+        
+        # Tools used so far
+        tools_used = [result.get("tool") for result in tool_results if result.get("tool")]
+        
         context = {
-            "user_profile": state.get("user_context", {}),
-            "budget_plan": state.get("budget", {}),
-            "data_status": {
-                "transactions_count": len(state.get("transactions", [])),
-                "is_categorized": bool(state.get("transactions") and 
-                                     state["transactions"] and 
-                                     "budget_category" in state["transactions"][0]),
-                "is_analyzed": state.get("deviation_details") is not None
+            "user_profile": {
+                "name": user_context.get("name", "User"),
+                "location": user_context.get("location", "Unknown"),
+                "monthly_income": user_context.get("monthly_income", "Unknown")
             },
+            "budget_categories": list(budget.keys()),
+            "total_budget": sum(budget.values()) if budget else 0,
+            "current_data_status": {
+                "transactions_available": has_transactions,
+                "transaction_count": len(transactions),
+                "transactions_categorized": is_categorized,
+                "spending_analyzed": has_analysis,
+                "issues_detected": deviation_detected
+            },
+            "tools_used_so_far": tools_used,
             "current_step": state.get("current_step", 0)
         }
         
-        # Only include SUMMARY of analysis results, not full data
-        if state.get("deviation_details"):
-            context["spending_summary"] = {
-                "deviation_detected": state.get("deviation_detected", False),
-                "categories_with_issues": list(state["deviation_details"].keys()),
-                "total_categories_analyzed": len(state.get("spending_analysis", {}).get("spending_by_category", {}))
-            }
-        
-        # Show recent tool results SUMMARY only
-        if state.get("tool_results"):
-            context["recent_tool"] = {
-                "last_tool": state["tool_results"][-1].get("tool", "unknown"),
-                "results_count": len(state["tool_results"])
+        # Add analysis insights if available
+        if has_analysis and state.get("deviation_details"):
+            deviation_details = state["deviation_details"]
+            context["analysis_insights"] = {
+                "problematic_categories": list(deviation_details.keys()),
+                "total_overage": sum(detail.get("overage", 0) for detail in deviation_details.values()),
+                "optimization_attempted": "optimize_budget" in tools_used,
+                "research_completed": "research_tips" in tools_used
             }
         
         analysis_prompt = f"""
-CURRENT STATE:
-{context}
+        CURRENT FINANCIAL ANALYSIS SITUATION:
+        {json.dumps(context, indent=2)}
 
-TASK: Based on this summary, decide your next action for cash flow management.
+        As Tracey, the financial analyst agent, analyze this situation and decide what would be most valuable to do next.
 
-Remember: Your goal is immediate cash flow rebalancing when overspending occurs.
-"""
+        Consider:
+        - What information do I have vs. what do I need?
+        - What would help this user most given their current situation?
+        - Have I provided sufficient value, or is more analysis needed?
+
+        Decide your next action based on thoughtful reasoning about the user's needs.
+        """
 
         return [HumanMessage(content=analysis_prompt)]
     
@@ -237,7 +238,6 @@ Remember: Your goal is immediate cash flow rebalancing when overspending occurs.
                 raise ValueError("No JSON found in response")
         except Exception as e:
             print(f"   - Parse Error: {e}")
-            # Smart fallback based on context instead of defaulting to analyze_spending
             lower_response = response_content.lower()
             if "categorize" in lower_response:
                 return {
@@ -252,7 +252,6 @@ Remember: Your goal is immediate cash flow rebalancing when overspending occurs.
                     "tool_call": {"tool": "optimize_budget", "args": {}}
                 }
             else:
-                # Force conclusion to prevent infinite loops
                 return {
                     "ready_for_conclusion": True,
                     "reasoning": "Parse error - concluding analysis",
@@ -269,20 +268,14 @@ Remember: Your goal is immediate cash flow rebalancing when overspending occurs.
         status = parsed_response.get("status", "good")
         key_insights = parsed_response.get("key_insights", [])
         recommendations = parsed_response.get("recommendations", [])
-        
-        # 🔧 FIX: Collect BOTH budget optimization AND research recommendations
         budget_recommendations = []
         research_recommendations = []
         
         for result in state.get("tool_results", []):
             if result.get("tool") == "optimize_budget" and "recommendations" in result:
                 budget_recommendations.extend(result["recommendations"])
-                print(f"  📊 Found {len(result['recommendations'])} budget optimization recommendations")
             elif result.get("tool") == "research_tips" and "recommendations" in result:
                 research_recommendations.extend(result["recommendations"])
-                print(f"  🔍 Found {len(result['recommendations'])} research recommendations")
-                print(f"  🔍 Research recommendations: {result['recommendations'][:2]}")
-                print(f"  🔍 Research recommendations: {result['recommendations'][:2]}")
         
         # Combine both types of recommendations
         all_recommendations = budget_recommendations + research_recommendations + recommendations

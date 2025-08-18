@@ -171,56 +171,41 @@ def create_detailed_log_entry(step_count, node_name, current_state):
     timestamp = datetime.now().strftime("%H:%M:%S")
     
     if node_name == "agent":
-        # agent reasoning - extract what the agent is thinking about
+        # Extract actual agent reasoning from the state
+        agent_reasoning = current_state.get("agent_reasoning", "")
+        decision_type = current_state.get("agent_decision_type", "unknown")
         tool_calls = current_state.get("tool_calls", [])
         final_plan = current_state.get("final_plan")
-        deviation_detected = current_state.get("deviation_detected", False)
         
-        if tool_calls:
-            # agent decided to call tools
-            tool_names = [call.get("tool", "unknown") for call in tool_calls]
-            if len(tool_names) == 1:
-                tool_name = tool_names[0]
-                if tool_name == "get_transactions":
-                    description = "Agent decided: Fetch transaction data from Plaid"
-                elif tool_name == "categorize_transactions":
-                    description = "Agent decided: Categorize transactions into budget categories"
-                elif tool_name == "analyze_spending":
-                    description = "Agent decided: Analyze spending patterns and detect budget deviations"
-                elif tool_name == "optimize_budget":
-                    description = "Agent decided: Optimize budget allocation based on spending patterns"
-                elif tool_name == "research_tips":
-                    args = tool_calls[0].get("args", {})
-                    topic = args.get("topic", "general")
-                    category = args.get("category", "unknown")
-                    description = f"Agent decided: Research savings tips for {category} ({topic})"
-                else:
-                    description = f"Agent decided: Call {tool_name} tool"
+        if agent_reasoning:
+            # Use the actual LLM reasoning
+            if decision_type == "tool_call" and tool_calls:
+                tool_name = tool_calls[0].get("tool", "unknown")
+                description = f"Agent Reasoning: {agent_reasoning}\n→ Calling: {tool_name}"
+            elif decision_type == "conclusion":
+                description = f"Agent Conclusion: {agent_reasoning}"
             else:
-                description = f"Agent decided: Call {len(tool_names)} tools: {', '.join(tool_names)}"
-        elif final_plan:
-            # generated final response
-            status = final_plan.get("status", "unknown")
-            if status == "alert":
-                description = "Agent concluded: Budget alert detected, generating recommendations"
-            elif status == "good":
-                description = "Agent concluded: Budget is on track, no issues found"
-            else:
-                description = f"Agent concluded: Analysis complete (status: {status})"
+                description = f"Agent Thinking: {agent_reasoning}"
         else:
-            if deviation_detected:
-                description = "Agent reasoning: Analyzing budget deviations and determining next action"
+            # Fallback to generic description if no reasoning captured
+            if tool_calls:
+                tool_name = tool_calls[0].get("tool", "unknown")
+                description = f"Agent decided: Call {tool_name} tool"
+            elif final_plan:
+                status = final_plan.get("status", "unknown")
+                description = f"Agent concluded: Analysis complete (status: {status})"
             else:
-                description = "Agent reasoning: Processing financial data and assessing budget health"
+                description = "Agent reasoning: Processing current state"
         
         return {
             "step": step_count,
             "type": "agent",
             "description": description,
             "timestamp": timestamp,
+            "reasoning": agent_reasoning,  # Store the full reasoning
             "details": {
                 "tool_calls": tool_calls,
-                "deviation_detected": deviation_detected,
+                "decision_type": decision_type,
                 "has_final_plan": bool(final_plan)
             }
         }
@@ -333,24 +318,33 @@ def display_budget_dashboard(current_budget, spending_summary):
 
 def display_agent_log():
     if st.session_state.execution_log:
-        st.subheader("Live Execution Log")
+        st.subheader("🧠 Live Agent Reasoning")
         for log_entry in st.session_state.execution_log:
             step = log_entry['step']
             timestamp = log_entry['timestamp']
             description = log_entry['description']
             log_type = log_entry['type']
+            reasoning = log_entry.get('reasoning', '')
             
             if log_type == "agent":
-                st.info(f"**Step {step}** ({timestamp})\n{description}")
+                # Show agent reasoning prominently
+                if reasoning:
+                    # Use markdown for better formatting of the reasoning
+                    reasoning_text = f"**Step {step}** ({timestamp})\n\n💭 *{reasoning}*"
+                    if "→ Calling:" in description:
+                        tool_part = description.split("→ Calling:")[1].strip()
+                        reasoning_text += f"\n\n **Action:** {tool_part}"
+                    st.info(reasoning_text)
+                else:
+                    # Fallback to description if no reasoning
+                    st.info(f"**Step {step}** ({timestamp})\n{description}")
             elif log_type == "tool":
                 st.success(f"**Step {step}** ({timestamp})\n{description}")
             else:  # complete
                 st.balloons()
                 st.success(f"**Step {step}** ({timestamp})\n{description}")
-         
-            # Removed the "Show details for Step N" checkbox section
     else: 
-        st.info("Click 'Update Transactions' to see the agent in action.")
+        st.info("Click 'Update Transactions' to see the agent reasoning in real-time.")
 
 def display_analysis_results(result):
     if not result: return
@@ -419,7 +413,7 @@ def display_transaction_summary(result):
         all_transactions = st.session_state.final_transactions
         
     if spending_analysis and all_transactions:
-        st.subheader("💳 Transaction Summary")
+        st.subheader("Transaction Summary")
         total_transactions = len(all_transactions)
         
         # Show summary metrics

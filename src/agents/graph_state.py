@@ -13,6 +13,8 @@ class GraphState(TypedDict):
     
     # decision tracking and analysis
     current_analysis: Optional[str]
+    agent_reasoning: Optional[str]  # store agent's reasoning 
+    agent_decision_type: Optional[str]  # "tool_call", "conclusion", "fallback"
     deviation_detected: bool
     deviation_details: Optional[Dict[str, Any]]
     research_queries: List[str]
