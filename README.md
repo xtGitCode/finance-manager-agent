@@ -8,7 +8,7 @@ The Financial Guardian is an AI agent named Tracey that acts as your personal fi
 
 ### Core Components using Agentic AI
 **High Level Overview**
-![High Level Overview Diagram](high_level_overview.png)
+![High Level Overview Diagram](high_level_architecture.png)
 
 **1. Reasoning Engine**
 - I built the core of the system on LangGraph to create a true reasoning engine. This allows the agent to make its own decisions, like dynamically choosing to use a research tool only after it has analyzed the data and found a problem, which is a big step up from a rigid, rule-based workflow.
