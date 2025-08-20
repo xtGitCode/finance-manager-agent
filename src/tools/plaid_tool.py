@@ -62,36 +62,24 @@ class PlaidTool:
             
             transactions = []
             for t in response['transactions']:
-                # randomize amounts for variety
                 base_amount = float(t.amount)
                 
-                # cap extremely large transactions (anything over RM 2000)
                 if base_amount > 2000:
                     base_amount = random.uniform(200, 1500)  
                     print(f"   - Capped large transaction to RM {base_amount:.2f}")
                 
-                # randomly adjust amount by ±10% to create variety
-                variance = random.uniform(0.9, 1.1)
-                adjusted_amount = base_amount * variance
-                
-                # add some completely random transactions
-                if random.random() < 0.5:  # 20% chance
-                    random_merchants = ['Local Coffee Shop', 'Online Purchase', 'Gas Station', 'Grocery Store', 'Restaurant']
-                    merchant_name = random.choice(random_merchants)
-                    adjusted_amount = random.uniform(10, 200)
-                else:
-                    merchant_name = t.merchant_name or t.name
+                merchant_name = t.merchant_name or t.name
                 
                 transactions.append({
                     'transaction_id': t.transaction_id + f"_{random.randint(1000, 9999)}",  
-                    'amount': round(adjusted_amount, 2),
+                    'amount': round(base_amount, 2),
                     'date': str(t.date),
                     'description': t.name,
                     'merchant_name': merchant_name,
                     'category': t.category[0] if t.category else 'Other'
                 })
             
-            print(f"   - Retrieved {len(transactions)} transactions (with caps and randomization)")
+            print(f"   - Retrieved {len(transactions)} transactions")
             return transactions
         except Exception as e:
             print(f"   - ❌ Plaid API Error: {e}"); return []
