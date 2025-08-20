@@ -29,12 +29,12 @@ def run_tests():
             print(result.stderr)
             
         if result.returncode == 0:
-            print("✅ Agentic behavior tests PASSED")
+            print("Agentic behavior tests PASSED")
         else:
-            print("❌ Agentic behavior tests FAILED")
+            print("Agentic behavior tests FAILED")
             
     except Exception as e:
-        print(f"❌ Error running agentic tests: {e}")
+        print(f"Error running agentic tests: {e}")
     
     print("\nTest 2: Budget Optimizer Tests")
     print("-" * 30)
@@ -56,17 +56,16 @@ def run_tests():
                 print(result.stderr)
                 
             if result.returncode == 0:
-                print("✅ Budget optimizer tests PASSED")
+                print("Budget optimizer tests PASSED")
             else:
-                print("❌ Budget optimizer tests FAILED")
+                print("Budget optimizer tests FAILED")
                 
         except Exception as e:
-            print(f"❌ Error running budget optimizer tests: {e}")
+            print(f"Error running budget optimizer tests: {e}")
     else:
-        print("ℹ️  Budget optimizer tests not found - skipping")
     
     # Quick integration test
-    print("\n📋 Test 3: Quick Integration Test")
+    print("\nTest 3: Quick Integration Test")
     print("-" * 30)
     
     try:
@@ -77,21 +76,21 @@ def run_tests():
         from agents.tracey_agent import TraceyAgent
         from agents.graph_state import GraphState
         
-        print("✅ Core imports successful")
+        print("Core imports successful")
         
         # Test that agent can be instantiated (with mocked dependencies)
         from unittest.mock import patch
         with patch('agents.tracey_agent.ChatGroq'):
             agent = TraceyAgent("test_key")
-            print("✅ Agent instantiation successful")
+            print("Agent instantiation successful")
             
-        print("✅ Integration test PASSED")
+        print("Integration test PASSED")
         
     except Exception as e:
-        print(f"❌ Integration test FAILED: {e}")
+        print(f"Integration test FAILED: {e}")
     
     print("\n" + "=" * 50)
-    print("🏁 Test run complete!")
+    print("Test run complete!")
 
 
 def run_specific_test(test_name):
@@ -115,12 +114,12 @@ def run_specific_test(test_name):
             print(result.stderr)
             
         if result.returncode == 0:
-            print(f"✅ {test_name} PASSED")
+            print(f"{test_name} PASSED")
         else:
-            print(f"❌ {test_name} FAILED")
+            print(f"{test_name} FAILED")
             
     except Exception as e:
-        print(f"❌ Error running {test_name}: {e}")
+        print(f"Error running {test_name}: {e}")
 
 
 if __name__ == "__main__":
