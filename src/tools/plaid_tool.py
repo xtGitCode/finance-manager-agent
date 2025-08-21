@@ -127,7 +127,6 @@ class PlaidTool:
         for category, new_spend in new_spending_by_category.items():
             total_spending_by_category[category] = total_spending_by_category.get(category, 0) + new_spend
 
-        # 🔥 FIX: Ensure ALL budget categories are included BEFORE deviation detection
         for budget_category in budget.keys():
             if budget_category not in total_spending_by_category:
                 total_spending_by_category[budget_category] = baseline_spending.get(budget_category, 0)
@@ -146,7 +145,6 @@ class PlaidTool:
         print(f"  Total spending: RM {sum(total_spending_by_category.values()):.2f}")
         
         deviations, total_overage = {}, 0
-        # 🔥 NOW deviation detection will check ALL categories (including baseline-only ones)
         for category, spent in total_spending_by_category.items():
             budgeted = budget.get(category, 0)
             if budgeted > 0 and spent > budgeted:
